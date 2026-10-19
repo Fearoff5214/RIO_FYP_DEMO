@@ -1,36 +1,38 @@
 """
-Chat-style Streamlit dashboard: attach a sheet-metal image or short video in
-the chat box (like an AI chat app's file attachment), and a reply bubble
-shows the annotated frame, PASS/FAIL verdict, and defect counts. Live camera
-feeds (webcam / ESP32-CAM) don't fit a turn-based chat, so they live in a
-collapsed sidebar section instead.
+Flask-based AI-chat dashboard for sheet-metal defect detection.
 
 Run with:
-    streamlit run src/app.py
+    python src/app.py
+Then open http://localhost:5000
 """
 from __future__ import annotations
 
+import base64
+import io
+import json
+import os
+import sys
 import tempfile
 from collections import Counter
 from pathlib import Path
 
 import cv2
-import streamlit as st
+import numpy as np
+from flask import Flask, jsonify, render_template, request, send_from_directory
+
+# Make sure sibling modules are importable when run as `python src/app.py`
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from alert import send_esp32_alert, send_plc_fail_signal
 from decision import decide
 from detector import Detector
-from sources import Esp32Source, WebcamSource
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_WEIGHTS = PROJECT_ROOT / "models" / "best.pt"
 SAMPLES_DIR = PROJECT_ROOT / "samples"
 
-# Detect at a low, fixed confidence so every candidate box is captured once;
-# the user's slider threshold (applied in decision.decide) controls what
-# actually counts as a defect, without needing to re-run the model.
 DETECT_CONF_FLOOR = 0.10
-MAX_VIDEO_FRAMES = 8  # cap how many frames of an uploaded video we sample
+MAX_VIDEO_FRAMES = 8
 
 DEFECT_COLOR = (0, 0, 255)  # BGR red
 BOX_THICKNESS = 2
@@ -38,8 +40,24 @@ BOX_THICKNESS = 2
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
 VIDEO_EXTS = {".mp4", ".avi", ".mov"}
 
+app = Flask(__name__, template_folder="templates", static_folder="static")
 
-def draw_detections(frame, detections, confidence_threshold):
+# Load detector once at startup
+_detector: Detector | None = None
+
+
+def get_detector() -> Detector:
+    global _detector
+    if _detector is None:
+        _detector = Detector(str(DEFAULT_WEIGHTS))
+    return _detector
+
+
+# ---------------------------------------------------------------------------
+# Helper: draw bounding boxes
+# ---------------------------------------------------------------------------
+
+def draw_detections(frame: np.ndarray, detections, confidence_threshold: float) -> np.ndarray:
     annotated = frame.copy()
     for det in detections:
         if det.confidence < confidence_threshold:
@@ -54,24 +72,30 @@ def draw_detections(frame, detections, confidence_threshold):
     return annotated
 
 
-@st.cache_resource
-def load_detector(weights_path: str) -> Detector:
-    return Detector(weights_path)
+def frame_to_b64(frame: np.ndarray) -> str:
+    """Convert a BGR OpenCV frame to a base64-encoded PNG data-URI."""
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    ok, buf = cv2.imencode(".jpg", rgb, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ok:
+        raise ValueError("Could not encode frame")
+    return "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode()
 
 
-def analyze_image(detector, frame, confidence_threshold):
+# ---------------------------------------------------------------------------
+# Core analysis helpers
+# ---------------------------------------------------------------------------
+
+def analyze_image(detector: Detector, frame: np.ndarray, conf: float):
     detections = detector.detect(frame, conf_threshold=DETECT_CONF_FLOOR)
-    verdict = decide(detections, confidence_threshold=confidence_threshold)
-    annotated = draw_detections(frame, detections, confidence_threshold)
+    verdict = decide(detections, confidence_threshold=conf)
+    annotated = draw_detections(frame, detections, conf)
     return annotated, verdict
 
 
-def analyze_video(detector, path: Path, confidence_threshold, max_frames=MAX_VIDEO_FRAMES):
-    """Samples up to max_frames evenly-spaced frames and analyzes each."""
+def analyze_video(detector: Detector, path: Path, conf: float, max_frames: int = MAX_VIDEO_FRAMES):
     cap = cv2.VideoCapture(str(path))
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
     step = max(1, total // max_frames) if total else 1
-
     results = []
     idx = 0
     while len(results) < max_frames:
@@ -79,195 +103,135 @@ def analyze_video(detector, path: Path, confidence_threshold, max_frames=MAX_VID
         if not ok:
             break
         if idx % step == 0:
-            results.append(analyze_image(detector, frame, confidence_threshold))
+            results.append(analyze_image(detector, frame, conf))
         idx += 1
     cap.release()
     return results
 
 
-def handle_attachment(detector, file_bytes: bytes, file_name: str, confidence_threshold, esp32_alert_url):
-    """Runs detection on one uploaded/sample file, returns (user_preview, reply_text, reply_image)."""
-    suffix = Path(file_name).suffix.lower()
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@app.route("/")
+def index():
+    samples = []
+    if SAMPLES_DIR.exists():
+        samples = sorted(
+            p.name for p in SAMPLES_DIR.glob("*")
+            if p.suffix.lower() not in (".md",)
+        )
+    return render_template("index.html", samples=samples)
+
+
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    """
+    Accepts multipart/form-data with:
+      - file: uploaded file  OR  sample_name: name of bundled sample
+      - confidence: float threshold (default 0.5)
+      - esp32_url: optional alert URL
+    Returns JSON with preview_b64, annotated_b64, verdict, counts, message.
+    """
+    conf = float(request.form.get("confidence", 0.5))
+    esp32_url = request.form.get("esp32_url", "").strip()
+
+    # Resolve file bytes + filename
+    if "file" in request.files and request.files["file"].filename:
+        f = request.files["file"]
+        file_bytes = f.read()
+        filename = f.filename
+    elif request.form.get("sample_name"):
+        name = request.form["sample_name"]
+        sample_path = SAMPLES_DIR / name
+        if not sample_path.exists():
+            return jsonify(error=f"Sample '{name}' not found"), 404
+        file_bytes = sample_path.read_bytes()
+        filename = name
+    else:
+        return jsonify(error="No file or sample provided"), 400
+
+    suffix = Path(filename).suffix.lower()
+
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp.write(file_bytes)
     tmp.close()
     tmp_path = Path(tmp.name)
 
-    if suffix in VIDEO_EXTS:
-        cap = cv2.VideoCapture(str(tmp_path))
-        ok, user_preview = cap.read()
-        cap.release()
-        if not ok:
-            return None, "Couldn't read any frames from that video.", None
+    try:
+        detector = get_detector()
 
-        frame_results = analyze_video(detector, tmp_path, confidence_threshold)
-        if not frame_results:
-            return user_preview, "Couldn't read any frames from that video.", None
+        if suffix in VIDEO_EXTS:
+            cap = cv2.VideoCapture(str(tmp_path))
+            ok, preview_frame = cap.read()
+            cap.release()
+            if not ok:
+                return jsonify(error="Could not read any frames from that video."), 400
 
-        overall_fail = any(not v.passed for _, v in frame_results)
-        total_counts = Counter()
-        for _, v in frame_results:
-            total_counts.update(v.counts)
-        display_frame = next((a for a, v in frame_results if not v.passed), frame_results[0][0])
+            frame_results = analyze_video(detector, tmp_path, conf)
+            if not frame_results:
+                return jsonify(error="Could not read any frames from that video."), 400
 
-        if overall_fail:
-            text = (
-                f"Scanned {len(frame_results)} sampled frames. "
-                f"❌ **FAIL** — defect(s) found: {dict(total_counts)}"
+            overall_fail = any(not v.passed for _, v in frame_results)
+            total_counts: Counter = Counter()
+            for _, v in frame_results:
+                total_counts.update(v.counts)
+
+            display_frame = next(
+                (a for a, v in frame_results if not v.passed),
+                frame_results[0][0],
             )
-        else:
-            text = f"Scanned {len(frame_results)} sampled frames. ✅ **PASS** — no defects above threshold in any of them."
-        passed = not overall_fail
-    else:
-        frame = cv2.imread(str(tmp_path))
-        if frame is None:
-            return None, "Couldn't read that image.", None
-        user_preview = frame
-        display_frame, verdict = analyze_image(detector, frame, confidence_threshold)
-        text = (
-            "✅ **PASS** — no defects above threshold"
-            if verdict.passed
-            else f"❌ **FAIL** — defects detected: {verdict.counts}"
-        )
-        passed = verdict.passed
 
-    if not passed:
-        send_plc_fail_signal()
-    if esp32_alert_url:
-        send_esp32_alert(esp32_alert_url, state=not passed)
+            passed = not overall_fail
+            n = len(frame_results)
+            if passed:
+                message = f"Scanned {n} sampled frames. No defects above threshold found."
+            else:
+                message = f"Scanned {n} sampled frames. Defect(s) detected."
 
-    return user_preview, text, display_frame
+            preview_b64 = frame_to_b64(preview_frame)
+            annotated_b64 = frame_to_b64(display_frame)
+            counts = dict(total_counts)
 
-
-def render_live_camera(detector, confidence_threshold, esp32_alert_url):
-    """Continuous webcam/ESP32-CAM feed - doesn't fit the turn-based chat above."""
-    source_kind = st.radio("Source", ["Webcam", "ESP32-CAM (Phase 3)"])
-    esp32_url = None
-    if source_kind == "ESP32-CAM (Phase 3)":
-        esp32_url = st.text_input("ESP32-CAM base URL", placeholder="http://192.168.1.50")
-        st.caption("Requires Phase 3 hardware running this project's firmware.")
-
-    if not st.button("Start live feed"):
-        return
-
-    try:
-        source = WebcamSource(0) if source_kind == "Webcam" else Esp32Source(f"{esp32_url.rstrip('/')}/stream")
-    except Exception as exc:
-        st.error(f"Could not open source: {exc}")
-        return
-
-    frame_slot = st.empty()
-    status_slot = st.empty()
-    last_alert_state = None
-    try:
-        while True:
-            frame = source.read()
+        elif suffix in IMAGE_EXTS:
+            frame = cv2.imread(str(tmp_path))
             if frame is None:
-                status_slot.info("Stream ended.")
-                break
-            annotated, verdict = analyze_image(detector, frame, confidence_threshold)
-            frame_slot.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB), channels="RGB")
-            status_slot.success("PASS") if verdict.passed else status_slot.error(f"FAIL - {verdict.counts}")
-            if esp32_alert_url and verdict.passed != (last_alert_state is None or last_alert_state):
-                send_esp32_alert(esp32_alert_url, state=not verdict.passed)
-                last_alert_state = verdict.passed
-    finally:
-        source.release()
+                return jsonify(error="Could not read that image."), 400
+            preview_b64 = frame_to_b64(frame)
+            annotated_frame, verdict = analyze_image(detector, frame, conf)
+            annotated_b64 = frame_to_b64(annotated_frame)
+            passed = verdict.passed
+            counts = verdict.counts
+            message = "No defects above threshold." if passed else "Defects detected."
+        else:
+            return jsonify(error=f"Unsupported file type: {suffix}"), 400
 
+        # Side effects
+        if not passed:
+            send_plc_fail_signal()
+        if esp32_url:
+            send_esp32_alert(esp32_url, state=not passed)
 
-def main():
-    st.set_page_config(page_title="Sheet Metal Defect Detection", layout="wide")
-    st.title("🔩 Sheet Metal Defect Detection")
-
-    if not DEFAULT_WEIGHTS.exists():
-        st.error(f"No trained weights found at {DEFAULT_WEIGHTS}. Run scripts/train.py + evaluate.py first.")
-        st.stop()
-
-    detector = load_detector(str(DEFAULT_WEIGHTS))
-
-    with st.sidebar:
-        st.header("Settings")
-        confidence_threshold = st.slider("Confidence threshold", 0.0, 1.0, 0.5, 0.05)
-        esp32_alert_url = st.text_input("ESP32-CAM alert URL (optional, for LED/buzzer)", placeholder="http://192.168.1.50")
-
-        st.caption(
-            "Caveats: trained on NEU-DET (hot-rolled steel strip), not stamped sheet/brackets/gaskets. "
-            "Metrics were measured on NEU-DET's own test split and won't automatically transfer to "
-            "ESP32-CAM images without separately testing on real captures."
+        return jsonify(
+            preview_b64=preview_b64,
+            annotated_b64=annotated_b64,
+            passed=passed,
+            counts=counts,
+            message=message,
+            filename=filename,
         )
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
-        sample_files = sorted(p.name for p in SAMPLES_DIR.glob("*") if p.suffix.lower() != ".md") if SAMPLES_DIR.exists() else []
-        if sample_files:
-            st.divider()
-            st.caption("No files handy? Drop a bundled sample into the chat:")
-            chosen = st.selectbox("Bundled samples", ["—"] + sample_files, label_visibility="collapsed")
-            if chosen != "—" and st.button(f"Send `{chosen}` to chat"):
-                st.session_state.setdefault("pending_sample", chosen)
 
-        st.divider()
-        with st.expander("Live camera (webcam / ESP32-CAM)"):
-            render_live_camera(detector, confidence_threshold, esp32_alert_url)
-
-        st.divider()
-        if st.button("Clear chat"):
-            st.session_state.messages = []
-            st.rerun()
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {
-                "role": "assistant",
-                "text": "Hi! Attach a sheet-metal image or short video using the 📎 button below "
-                        "and I'll check it for surface defects.",
-                "image": None,
-            }
-        ]
-
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            if msg.get("image") is not None:
-                st.image(cv2.cvtColor(msg["image"], cv2.COLOR_BGR2RGB), channels="RGB")
-            if msg.get("text"):
-                st.markdown(msg["text"])
-
-    prompt = st.chat_input(
-        "Attach an image or video to check for defects...",
-        accept_file=True,
-        file_type=["jpg", "jpeg", "png", "bmp", "mp4", "avi", "mov"],
-    )
-
-    pending_sample = st.session_state.pop("pending_sample", None)
-
-    if pending_sample or (prompt and prompt.files):
-        files_to_process = []
-        if pending_sample:
-            sample_path = SAMPLES_DIR / pending_sample
-            files_to_process.append(("sample", sample_path, pending_sample))
-        if prompt and prompt.files:
-            for f in prompt.files:
-                files_to_process.append(("upload", f, f.name))
-
-        for kind, payload, name in files_to_process:
-            file_bytes = payload.read_bytes() if kind == "sample" else payload.getvalue()
-
-            user_preview, reply_text, reply_image = handle_attachment(
-                detector, file_bytes, name, confidence_threshold, esp32_alert_url
-            )
-
-            user_text = (prompt.text if prompt and prompt.text else None) or f"Sent `{name}`"
-            st.session_state.messages.append({"role": "user", "text": user_text, "image": user_preview})
-            st.session_state.messages.append({"role": "assistant", "text": reply_text, "image": reply_image})
-
-        st.rerun()
-    elif prompt and prompt.text:
-        st.session_state.messages.append({"role": "user", "text": prompt.text, "image": None})
-        st.session_state.messages.append({
-            "role": "assistant",
-            "text": "Attach an image or video using the 📎 button and I'll check it for defects.",
-            "image": None,
-        })
-        st.rerun()
+@app.route("/samples/<path:filename>")
+def serve_sample(filename):
+    return send_from_directory(str(SAMPLES_DIR), filename)
 
 
 if __name__ == "__main__":
-    main()
+    if not DEFAULT_WEIGHTS.exists():
+        print(f"ERROR: No trained weights found at {DEFAULT_WEIGHTS}")
+        print("Run scripts/train.py + evaluate.py first.")
+        sys.exit(1)
+    app.run(host="0.0.0.0", port=5000, debug=False)

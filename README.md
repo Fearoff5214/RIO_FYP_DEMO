@@ -1,9 +1,8 @@
 # Sheet Metal Defect Detection — Demo
 
-YOLOv8-based surface defect detection: pick a frame source (upload a file,
-try a bundled sample, point at a local file/folder, use a webcam, or — once
-hardware exists — an ESP32-CAM stream), get PASS/FAIL with bounding boxes
-and per-class counts in a Streamlit dashboard.
+YOLOv8-based surface defect detection: attach an image or video in the
+AI-chat-style web dashboard, get PASS/FAIL with bounding-box annotations
+and per-class defect counts. Built with Flask + vanilla HTML/CSS/JS.
 
 ## Status
 
@@ -32,17 +31,16 @@ dataset download.
 Trained weights are already in `models/best.pt`, so you can go straight to:
 
 ```
-streamlit run src/app.py
+python src/app.py
 ```
 
-In the sidebar, pick a frame source:
-- **Upload image/video** — upload your own file and see the verdict.
-- **Sample image/video** — bundled samples in `samples/` (see `samples/README.md`):
-  3 real NEU-DET defect images (should FAIL) and 2 synthetic defect-free
-  plates (should PASS), plus a short demo video cycling through both.
-- **Image/video file** — a local path (single image, folder of images, or video).
-- **Webcam** — your machine's camera.
-- **ESP32-CAM (Phase 3)** — not usable until the hardware is flashed and wired up.
+Then open **http://localhost:5000** in your browser.
+
+- **Attach image/video** — click the 📎 button in the chat input to upload your own file.
+- **Bundled samples** — click any sample chip in the sidebar; 3 real NEU-DET defect images
+  (should FAIL) and 2 synthetic defect-free plates (should PASS), plus a short demo video.
+- **Confidence threshold** — adjust in the Settings panel (sidebar → Settings tab).
+- **ESP32-CAM alert URL** — optional, configure in Settings to drive the LED/buzzer.
 
 ## Re-running the pipeline from scratch
 
