@@ -103,6 +103,10 @@ function Job({ id }) {
       <h2>Job {id} <small>{job.part_number} · {job.status}</small></h2>
       {err && <p className="err">{err}</p>}
       {pending && <Gate pending={pending} send={send} />}
+      {!pending && graph.next.length > 0 && !['completed', 'on_hold'].includes(job.status) && (
+        <div className="card working"><b>Working…</b>
+          <span className="hint">running stage: {graph.next.join(', ')} (the first run loads models and can take a minute)</span></div>
+      )}
       {st.defects && <div className="card"><h3>Defects</h3><Defects list={st.defects} /></div>}
       {st.flags?.length > 0 && <p className="err">Flags: {st.flags.join(', ')}</p>}
       {job.result.report_paths && <div className="card"><h3>Reports</h3>

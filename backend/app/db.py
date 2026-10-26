@@ -200,3 +200,8 @@ def outbox_list(status: str | None = None, job_id: str | None = None) -> list[di
     with _lock:
         rows = conn().execute(q + " ORDER BY id", args).fetchall()
     return [{**dict(r), "payload": json.loads(r["payload"])} for r in rows]
+
+
+def set_chunk_embedding(chunk_id: int, embedding: list[float]) -> None:
+    with tx() as c:
+        c.execute("UPDATE kb_chunks SET embedding=? WHERE id=?", (json.dumps(embedding), chunk_id))

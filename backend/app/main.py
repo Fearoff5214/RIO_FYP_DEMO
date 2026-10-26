@@ -22,6 +22,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allo
 def _startup() -> None:
     if db.count_chunks() == 0 and config.KB_SEED_DIR.exists():
         rag.ingest_seed_dir()
+    rag.reindex_if_needed()
 
     def retry_loop():  # re-send queued MES/QMS/ERP messages every minute
         while True:

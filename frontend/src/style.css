@@ -24,3 +24,5 @@ li.active { border-color:var(--accent); } li small { float:right; color:var(--mu
 .preview { width:100%; border:1px solid var(--line); } .hint { color:var(--muted); font-size:13px; margin:0; }
 select { padding:6px 8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); font:inherit; }
 pre { overflow:auto; border:1px solid var(--line); padding:8px; font-size:12px; }
+.working { border-style:dashed; }
+a { color:inherit; text-decoration:underline; }

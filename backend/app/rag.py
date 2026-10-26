@@ -114,3 +114,13 @@ def search(query: str, defect_types: list[str] | None = None, material: str | No
                          "score": round(score, 4), "tags": ch["tags"]})
     hits.sort(key=lambda h: h["score"], reverse=True)
     return hits[:top_k]
+
+
+def reindex_if_needed() -> int:
+    """Re-embed chunks whose vector size differs from the current embedder (e.g. after pulling
+    nomic-embed-text, or after Ollama went down at ingest time). Returns chunks rebuilt."""
+    size = len(llm.embed("probe"))
+    stale = [c for c in db.all_chunks() if len(c["embedding"]) != size]
+    for c in stale:
+        db.set_chunk_embedding(c["id"], llm.embed(c["text"]))
+    return len(stale)

@@ -165,3 +165,44 @@ def test_operator_can_accept_a_poor_image_and_it_is_flagged(env, detections):
     workflow.resume(job, {"action": "accept"})
     assert gate_name(job) == "engineer"
     assert "accepted_poor_image" in workflow.status(job)["state"]["flags"]
+
+
+GOOD_CAUSES = {"causes": [{"cause": "worn roller", "effect": "scratch lines", "precautions": ["replace roller"],
+                           "sources": [1], "rationale": "KB paragraph 1"}]}
+
+
+def test_l5_invalid_llm_output_is_regenerated_then_accepted(env, image, detections, monkeypatch):
+    from backend.app import llm
+    replies = iter([None, {"causes": [{"cause": "uncited"}]}, GOOD_CAUSES])  # invalid, invalid, valid
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "chat_json", lambda s, u: next(replies))
+    job = workflow.start_job("SM-1001", [image])
+    run_to_gate(job, {"engineer": CONFIRM})
+    st = workflow.status(job)["state"]
+    assert st["retries"]["L5"] == 2 and "low_confidence" not in st["flags"]
+    assert st["rca"][0]["cause"] == "worn roller"
+
+
+def test_l5_gives_up_after_cap_and_falls_back_to_evidence(env, image, detections, monkeypatch):
+    from backend.app import llm
+    monkeypatch.setattr(llm, "available", lambda: True)
+    monkeypatch.setattr(llm, "chat_json", lambda s, u: {"causes": []})
+    job = workflow.start_job("SM-1001", [image])
+    run_to_gate(job, {"engineer": CONFIRM})
+    st = workflow.status(job)["state"]
+    assert st["retries"]["L5"] == config.MAX_RETRIES["L5"] and "low_confidence" in st["flags"]
+    assert st["rca"]  # still gives the expert candidates, taken from the documents
+
+
+def test_l7_incomplete_report_is_repaired_once(env, image, detections, monkeypatch):
+    from backend.app import report
+    real, calls = report.missing, {"n": 0}
+
+    def missing_once(data):
+        calls["n"] += 1
+        return ["dimensional"] if calls["n"] == 1 else real(data)
+    monkeypatch.setattr(report, "missing", missing_once)
+    job = workflow.start_job("SM-1001", [image])
+    run_to_gate(job, {"engineer": CONFIRM, "expert": SELECT1})
+    st = workflow.status(job)["state"]
+    assert st["retries"]["L7"] == 1 and st["report_paths"] and gate_name(job) == "approver"

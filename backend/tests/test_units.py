@@ -71,3 +71,11 @@ def test_action_loop_l9_escalates_ineffective(env):
     aid = db.add_action("j1", "polish rollers")
     assert db.close_action(aid, effective=False, evidence="recurred") == "escalated"
     assert db.close_action(aid, effective=True) == "closed"
+
+
+def test_reindex_rebuilds_chunks_when_embedder_changes(env, monkeypatch):
+    n = db.count_chunks()
+    assert rag.reindex_if_needed() == 0  # same embedder: nothing to do
+    monkeypatch.setattr(llm, "embed", lambda text: [0.5, 0.5, 0.5])  # a different-sized embedder
+    assert rag.reindex_if_needed() == n
+    assert {len(c["embedding"]) for c in db.all_chunks()} == {3}
