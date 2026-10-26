@@ -7,12 +7,13 @@ gate node does only deterministic work before the interrupt and side effects aft
 import functools
 import json
 import shutil
+import time
 from pathlib import Path
 
 import cv2
 from langgraph.types import interrupt
 
-from .. import config, db, dimensional, rag, rca, report
+from .. import camera, config, db, dimensional, integrations, learning, rag, rca, report
 from ..cv import detector, quality
 
 CAP = config.MAX_RETRIES
@@ -75,7 +76,17 @@ def load_context(state):
 @stage("capture")
 def capture(state):
     r = _retries(state)
+    src = state.get("source") or {}
+    live = src.get("type") == "camera"
+    extra, flags = {}, list(state.get("flags", []))
     sources = state.get("working_paths") or state["image_paths"]
+    if live and state.get("recapture"):  # expert rejected all causes: back to the default camera recipe
+        try:
+            sources = _grab(state, camera.DEFAULT_RECIPE)
+            extra.update(recapture=False, recipe=dict(camera.DEFAULT_RECIPE), image_paths=sources)
+        except camera.CameraError as e:
+            flags.append(f"camera_error:{e}")
+            extra["recapture"] = False
     reports, adjusted, all_ok, problems = [], [], True, set()
     for p in sources:
         img = cv2.imread(p)
@@ -92,12 +103,45 @@ def capture(state):
         else:
             adjusted.append(p)
     if all_ok:
-        return {"quality": reports, "working_paths": sources, "retries": r, "_route": "ok"}
+        return {**extra, "quality": reports, "working_paths": sources, "retries": r, "flags": flags, "_route": "ok"}
     if r["L2"] < CAP["L2"]:
         r["L2"] += 1
-        return {"quality": reports, "working_paths": adjusted, "retries": r, "_route": "retry"}
-    return {"quality": reports, "working_paths": sources, "retries": r, "_route": "ok",
-            "flags": [*state.get("flags", []), f"image_quality_unresolved:{','.join(sorted(problems))}"]}
+        if live:  # L2 for real: change the camera recipe and take new frames
+            recipe = camera.adjust_recipe(state.get("recipe") or {}, sorted(problems))
+            try:
+                return {**extra, "quality": reports, "working_paths": _grab(state, recipe), "recipe": recipe,
+                        "retries": r, "flags": flags, "_route": "retry"}
+            except camera.CameraError as e:
+                flags.append(f"camera_error:{e}")
+        return {**extra, "quality": reports, "working_paths": adjusted, "retries": r, "flags": flags, "_route": "retry"}
+    return {**extra, "quality": reports, "working_paths": sources, "retries": r, "_route": "alert",
+            "flags": [*flags, f"image_quality_unresolved:{','.join(sorted(problems))}"]}
+
+
+@stage("quality_alert")
+def quality_alert(state):
+    """Retries exhausted: an unusable image must never turn into an OK verdict by default."""
+    flags = [f for f in state.get("flags", []) if not f.startswith("image_quality_unresolved")]
+    answer = _gate(state, "operator", {"message": "Image quality could not be fixed automatically.",
+                                       "quality": state.get("quality", []), "flags": state.get("flags", [])})
+    action = answer.get("action", "abort")
+    if action == "abort":
+        return {"status": "on_hold", "flags": [*state.get("flags", []), "aborted_by_operator"], "_route": "hold"}
+    if action == "retake":
+        r = _retries(state)
+        r["L2"] = 0
+        update = {"retries": r, "flags": flags, "_route": "retry"}
+        if answer.get("image_paths"):  # operator supplied replacement photos
+            update.update(image_paths=answer["image_paths"], working_paths=None)
+        elif (state.get("source") or {}).get("type") == "camera":
+            update.update(recapture=True, working_paths=None)
+        return update
+    return {"flags": [*state.get("flags", []), "accepted_poor_image"], "_route": "ok"}  # operator accepts it
+
+
+def _grab(state, recipe: dict) -> list[str]:
+    return camera.capture(state["source"]["device"], Path(state["image_paths"][0]).parent,
+                          len(state["image_paths"]), recipe)
 
 
 # --- Stage 2 -----------------------------------------------------------------------------
@@ -137,7 +181,7 @@ def detect(state):
     dets = []
     for p in state["working_paths"]:
         img = cv2.imread(p)
-        for d in detector.fuse(detector.detect(Path(p))):
+        for d in detector.fuse(detector.detect(Path(p), state["part_number"])):
             dets.append({**d, "image": p, "severity": detector.severity(d, img.shape)})
     return {"defects": dets}
 
@@ -212,7 +256,8 @@ def gate2(state):
             r["L6"] += 1
             for k in ("L3", "L4", "L5"):
                 r[k] = 0
-            return {"retries": r, "working_paths": None, "flags": state.get("flags", []), "_route": "reinspect"}
+            return {"retries": r, "working_paths": None, "recapture": True, "flags": state.get("flags", []),
+                    "_route": "reinspect"}
         sel = {"cause": answer.get("text") or "Manual RCA required", "effect": "", "precautions": [],
                "reviewer": reviewer, "reason": answer.get("reason", ""), "manual": True}
         return {"retries": r, "selected_cause": sel, "flags": [*state.get("flags", []), "manual_rca"], "_route": "ok"}
@@ -265,7 +310,6 @@ def gate3(state):
 @stage("finalize")
 def finalize(state):
     job_id, dets, sel = state["job_id"], state["defects"], state.get("selected_cause")
-    db.audit(job_id, "dispatch", "notify", {"targets": ["dashboard", "MES", "QMS", "ERP", "email"], "simulated": True})
     if dets and sel:
         text = (f"Case {job_id}. Defects: {', '.join(sorted({d['cls'] for d in dets}))}. "
                 f"Material: {state['part'].get('material', '')}\nCause: {sel['cause']}\n"
@@ -276,6 +320,17 @@ def finalize(state):
     db.update_job(job_id, status="completed", result={"report_paths": state["report_paths"],
                                                       "result": state["report_data"]["result"],
                                                       "flags": state.get("flags", [])})
+    try:  # delivery problems are queued for retry and must not fail a signed-off job
+        integrations.dispatch(job_id, {
+            "part_number": state["part_number"], "result": state["report_data"]["result"],
+            "completed_at": time.time(), "defects": dets, "dimensional": state.get("dimensional", {}),
+            "selected_cause": sel, "actions": [a["description"] for a in db.list_actions(job_id)],
+            "approver": state.get("approver"), "flags": state.get("flags", []),
+            "report_paths": state["report_paths"]})
+    except Exception as e:
+        db.audit(job_id, "dispatch", "error", {"error": f"{type(e).__name__}: {e}"})
+    learning.recalibrate()  # L12
+    learning.maybe_auto_retrain()  # L10, only when AUTO_RETRAIN=1 and enough new labels
     return {"status": "completed"}
 
 

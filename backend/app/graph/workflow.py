@@ -18,7 +18,7 @@ def _route(state):
 
 def build(checkpointer):
     g = StateGraph(InspectionState)
-    for name, fn in [("load_context", nodes.load_context), ("capture", nodes.capture),
+    for name, fn in [("load_context", nodes.load_context), ("capture", nodes.capture), ("quality_alert", nodes.quality_alert),
                      ("dimensional", nodes.dimensional_check), ("gate1", nodes.gate1),
                      ("detect", nodes.detect), ("label_review", nodes.label_review),
                      ("retrieve", nodes.retrieve), ("rca", nodes.run_rca), ("gate2", nodes.gate2),
@@ -27,7 +27,8 @@ def build(checkpointer):
 
     g.add_edge(START, "load_context")
     g.add_conditional_edges("load_context", _route, {"ok": "capture", "retry": "load_context", "hold": END})
-    g.add_conditional_edges("capture", _route, {"ok": "dimensional", "retry": "capture"})
+    g.add_conditional_edges("capture", _route, {"ok": "dimensional", "retry": "capture", "alert": "quality_alert"})
+    g.add_conditional_edges("quality_alert", _route, {"ok": "dimensional", "retry": "capture", "hold": END})
     g.add_edge("dimensional", "gate1")
     g.add_conditional_edges("gate1", _route, {"ok": "detect", "retry": "dimensional"})
     g.add_edge("detect", "label_review")
@@ -68,12 +69,13 @@ def _cfg(job_id: str) -> dict:
     return {"configurable": {"thread_id": job_id}}
 
 
-def start_job(part_number: str, image_paths: list[str], job_id: str | None = None) -> str:
+def start_job(part_number: str, image_paths: list[str], job_id: str | None = None,
+              source: dict | None = None, recipe: dict | None = None) -> str:
     job_id = job_id or uuid.uuid4().hex[:12]
     db.create_job(job_id, part_number)
     db.audit(job_id, "trigger", "job_created", {"part_number": part_number, "images": image_paths})
     graph().invoke({"job_id": job_id, "part_number": part_number, "image_paths": image_paths,
-                    "flags": [], "retries": {}, "report_revision": 1, "approver_comments": []}, _cfg(job_id))
+                    "flags": [], "retries": {}, "source": source or {"type": "upload"}, "recipe": recipe or {}, "report_revision": 1, "approver_comments": []}, _cfg(job_id))
     return job_id
 
 

@@ -7,3 +7,8 @@ knowledge_base/index/
 *.log
 node_modules/
 frontend/dist/
+models/versions/
+models/sam/
+models/anomaly/
+data/good/
+mobile_sam.pt

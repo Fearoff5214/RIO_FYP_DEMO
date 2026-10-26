@@ -132,3 +132,36 @@ def test_checkpoint_survives_new_graph_instance(env, image, detections):
     assert gate_name(job) == "engineer"
     workflow.resume(job, CONFIRM)
     assert gate_name(job) == "expert"
+
+
+def _flat(env):
+    import cv2
+    import numpy as np
+    flat = env / "flat.png"
+    cv2.imwrite(str(flat), np.full((120, 120, 3), 128, np.uint8))
+    return str(flat)
+
+
+def test_unusable_image_stops_at_operator_gate_instead_of_passing(env, detections):
+    detections["value"] = []  # a blank frame detects nothing: without the gate this would be "OK"
+    job = workflow.start_job("SM-1001", [_flat(env)])
+    assert gate_name(job) == "operator"
+    workflow.resume(job, {"action": "abort"})
+    j = db.get_job(job)
+    assert j["status"] == "on_hold" and workflow.status(job)["next"] == []
+    assert "aborted_by_operator" in workflow.status(job)["state"]["flags"]
+
+
+def test_operator_can_retake_with_a_good_photo(env, image, detections):
+    job = workflow.start_job("SM-1001", [_flat(env)])
+    workflow.resume(job, {"action": "retake", "image_paths": [image]})
+    st = workflow.status(job)["state"]
+    assert gate_name(job) == "engineer"
+    assert st["retries"]["L2"] == 0 and not any(f.startswith("image_quality_unresolved") for f in st["flags"])
+
+
+def test_operator_can_accept_a_poor_image_and_it_is_flagged(env, detections):
+    job = workflow.start_job("SM-1001", [_flat(env)])
+    workflow.resume(job, {"action": "accept"})
+    assert gate_name(job) == "engineer"
+    assert "accepted_poor_image" in workflow.status(job)["state"]["flags"]

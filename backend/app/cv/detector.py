@@ -10,14 +10,20 @@ from pathlib import Path
 from .. import config
 
 
-@lru_cache(maxsize=1)
-def _yolo():
+@lru_cache(maxsize=2)
+def _yolo(weights: str):
     from ultralytics import YOLO
-    return YOLO(str(config.YOLO_WEIGHTS))
+    return YOLO(weights)
+
+
+def reload_model() -> None:
+    """Drop cached weights after a model promotion or rollback."""
+    _yolo.cache_clear()
 
 
 def _detect_yolo(path: Path) -> list[dict]:
-    res = _yolo().predict(str(path), conf=config.CONF_THRESHOLD, verbose=False)[0]
+    from .. import learning
+    res = _yolo(str(learning.active_weights())).predict(str(path), conf=config.CONF_THRESHOLD, verbose=False)[0]
     names = res.names
     return [{"cls": names[int(b.cls)], "conf": round(float(b.conf), 4),
              "bbox": [round(float(v), 1) for v in b.xyxy[0].tolist()], "source": "yolo"}
@@ -31,15 +37,49 @@ def _detect_manifest(path: Path) -> list[dict]:
     return [{**d, "source": "manifest"} for d in json.loads(manifest.read_text()).get(path.name, [])]
 
 
-def detect(path: Path) -> list[dict]:
+def _detect_primary(path: Path) -> list[dict]:
     return _detect_manifest(path) if config.INSPECTION_MODE == "manifest" else _detect_yolo(path)
+
+
+def _find_unseen(path: Path, known: list[dict], part_number: str | None) -> list[dict]:
+    """Anomaly hotspots that no YOLO box explains become 'unknown_anomaly' detections.
+
+    Confidence is capped under the label-review threshold on purpose: a defect the
+    classifier has never seen must always be looked at by a person (the PDF's Anomalib step)."""
+    if not config.ANOMALY_ENABLED:
+        return []
+    from . import anomaly
+    model = anomaly.model_path(part_number)
+    if model is None:
+        return []
+    import cv2
+    res = anomaly.score(cv2.imread(str(path)), model)
+    if not res["anomalous"] or not res["bbox"]:
+        return []
+    cx, cy = (res["bbox"][0] + res["bbox"][2]) / 2, (res["bbox"][1] + res["bbox"][3]) / 2
+    if any(k["bbox"][0] <= cx <= k["bbox"][2] and k["bbox"][1] <= cy <= k["bbox"][3] for k in known):
+        return []
+    conf = round(min(config.LABEL_REVIEW_CONF - 0.05, 0.4 + 0.2 * (res["ratio"] - 1)), 3)
+    return [{"cls": "unknown_anomaly", "conf": conf, "bbox": res["bbox"], "source": "anomaly",
+             "anomaly_score": res["score"], "anomaly_ratio": res["ratio"]}]
+
+
+def detect(path: Path, part_number: str | None = None) -> list[dict]:
+    """Stage 3: parallel detectors on one image, merged. YOLO classifies, the anomaly model
+    adds unseen defects, SAM turns every box into a mask."""
+    from . import segmenter
+    dets = _detect_primary(path)
+    dets += _find_unseen(path, dets, part_number)
+    return segmenter.segment(path, dets)
 
 
 def severity(det: dict, img_shape: tuple) -> str:
     """Size-based severity: share of the image covered by the box."""
     h, w = img_shape[:2]
     x1, y1, x2, y2 = det["bbox"]
-    frac = max(0.0, (x2 - x1) * (y2 - y1)) / float(h * w)
+    frac = det.get("mask_frac")  # real defect area when SAM produced a mask
+    if frac is None:
+        frac = max(0.0, (x2 - x1) * (y2 - y1)) / float(h * w)
     return "high" if frac > 0.10 else "medium" if frac > 0.02 else "low"
 
 

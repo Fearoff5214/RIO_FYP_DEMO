@@ -6,7 +6,10 @@ class InspectionState(TypedDict, total=False):
     part_number: str
     part: dict | None
     image_paths: list[str]      # as uploaded
-    working_paths: list[str]    # after quality auto-adjust
+    working_paths: list[str]    # after quality auto-adjust / recapture
+    source: dict                # {'type': 'upload'} | {'type': 'camera', 'device': int}
+    recipe: dict                # live-camera settings in use
+    recapture: bool             # set by gate 2 reject-all: take new frames at the default recipe
     quality: list[dict]
     scale_override: float | None
     dimensional: dict

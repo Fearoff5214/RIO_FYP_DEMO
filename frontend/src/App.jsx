@@ -1,39 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-
-const api = async (path, opts) => {
-  const r = await fetch(`/api${path}`, opts)
-  if (!r.ok) throw new Error((await r.text()) || r.statusText)
-  return r.json()
-}
-const post = (path, body) =>
-  api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-
-function NewJob({ onCreated }) {
-  const [part, setPart] = useState('SM-1001')
-  const [files, setFiles] = useState([])
-  const [err, setErr] = useState('')
-  const submit = async (e) => {
-    e.preventDefault()
-    const fd = new FormData()
-    fd.append('part_number', part)
-    files.forEach((f) => fd.append('files', f))
-    try {
-      onCreated((await api('/jobs', { method: 'POST', body: fd })).job_id)
-    } catch (ex) {
-      setErr(ex.message)
-    }
-  }
-  return (
-    <form onSubmit={submit} className="card">
-      <h3>New inspection</h3>
-      <label>Part number <input value={part} onChange={(e) => setPart(e.target.value)} required /></label>
-      <label>Images <input type="file" multiple accept="image/*" required
-        onChange={(e) => setFiles([...e.target.files])} /></label>
-      <button>Start</button>
-      {err && <p className="err">{err}</p>}
-    </form>
-  )
-}
+import { api, post } from './api.js'
+import Admin from './Admin.jsx'
+import NewJob from './NewJob.jsx'
 
 function Defects({ list }) {
   return (
@@ -55,6 +23,17 @@ function Gate({ pending, send }) {
     <div className="card gate"><h3>Part not found</h3><p>{pending.message}</p>
       <input placeholder="Part number" onChange={set('pn')} />
       <button onClick={() => send({ part_number: v.pn })}>Retry</button></div>
+  )
+  if (g === 'operator') return (
+    <div className="card gate"><h3>Operator alert · image quality</h3><p>{pending.message}</p>
+      <table><thead><tr><th>Blur</th><th>Glare</th><th>Exposure</th><th>Problems</th></tr></thead>
+        <tbody>{pending.quality.map((q, i) => (
+          <tr key={i} className={q.ok ? '' : 'bad'}><td>{q.blur}</td><td>{q.glare}</td><td>{q.exposure}</td>
+            <td>{q.problems.join(', ') || 'ok'}</td></tr>))}</tbody></table>
+      <p className="hint">Fix lighting or focus, then retake. Accepting a poor image is recorded in the report.</p>
+      <button onClick={() => send({ action: 'retake' })}>Retake</button>
+      <button className="secondary" onClick={() => send({ action: 'accept' })}>Accept as is</button>
+      <button className="secondary" onClick={() => send({ action: 'abort' })}>Abort job</button></div>
   )
   if (g === 'engineer') return (
     <div className="card gate"><h3>Gate 1 · Engineer: dimensional result</h3>
@@ -140,19 +119,23 @@ function Job({ id }) {
 export default function App() {
   const [jobs, setJobs] = useState([])
   const [sel, setSel] = useState(null)
+  const [admin, setAdmin] = useState(false)
   const refresh = useCallback(() => api('/jobs').then(setJobs).catch(() => {}), [])
   useEffect(() => { refresh(); const t = setInterval(refresh, 5000); return () => clearInterval(t) }, [refresh])
   return (
     <div className="layout">
       <aside>
         <h1>Novaliseo<br /><small>AI Quality Inspection</small></h1>
-        <NewJob onCreated={(id) => { setSel(id); refresh() }} />
+        <NewJob onCreated={(id) => { setSel(id); setAdmin(false); refresh() }} />
+        <button className="secondary" onClick={() => setAdmin(!admin)}>
+          {admin ? 'Back to jobs' : 'Learning and integrations'}
+        </button>
         <h3>Jobs</h3>
         <ul>{jobs.map((j) => (
-          <li key={j.id} className={j.id === sel ? 'active' : ''} onClick={() => setSel(j.id)}>
+          <li key={j.id} className={j.id === sel ? 'active' : ''} onClick={() => { setSel(j.id); setAdmin(false) }}>
             {j.part_number} <small>{j.status}</small></li>))}</ul>
       </aside>
-      <main>{sel ? <Job id={sel} key={sel} /> : <p>Select or create a job.</p>}</main>
+      <main>{admin ? <Admin /> : sel ? <Job id={sel} key={sel} /> : <p>Select or create a job.</p>}</main>
     </div>
   )
 }

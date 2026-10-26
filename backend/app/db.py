@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS kb_chunks (
 CREATE TABLE IF NOT EXISTS feedback (
   id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, kind TEXT, payload TEXT, ts REAL
 );
+CREATE TABLE IF NOT EXISTS outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, system TEXT, payload TEXT, status TEXT,
+  attempts INTEGER, last_error TEXT, ts REAL, UNIQUE(job_id, system)
+);
 CREATE TABLE IF NOT EXISTS actions (
   id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT, description TEXT, owner TEXT, due TEXT,
   status TEXT, evidence TEXT, ts REAL
@@ -168,3 +172,31 @@ def close_action(action_id: int, effective: bool, evidence: str = "") -> str:
     with tx() as c:
         c.execute("UPDATE actions SET status=?, evidence=? WHERE id=?", (status, evidence, action_id))
     return status
+
+
+# --- outbox: guaranteed-delivery queue for MES/QMS/ERP/notification messages ---------------
+
+def outbox_enqueue(job_id: str, system: str, payload: dict) -> None:
+    with tx() as c:  # UNIQUE(job_id, system) makes re-dispatching a job idempotent
+        c.execute("INSERT OR IGNORE INTO outbox (job_id, system, payload, status, attempts, last_error, ts) "
+                  "VALUES (?,?,?,?,?,?,?)", (job_id, system, json.dumps(payload, default=str), "pending", 0, "", time.time()))
+
+
+def outbox_update(row_id: int, status: str, attempts: int, error: str = "") -> None:
+    with tx() as c:
+        c.execute("UPDATE outbox SET status=?, attempts=?, last_error=? WHERE id=?", (status, attempts, error, row_id))
+
+
+def outbox_list(status: str | None = None, job_id: str | None = None) -> list[dict]:
+    q, args, where = "SELECT * FROM outbox", [], []
+    if status:
+        where.append("status=?")
+        args.append(status)
+    if job_id:
+        where.append("job_id=?")
+        args.append(job_id)
+    if where:
+        q += " WHERE " + " AND ".join(where)
+    with _lock:
+        rows = conn().execute(q + " ORDER BY id", args).fetchall()
+    return [{**dict(r), "payload": json.loads(r["payload"])} for r in rows]

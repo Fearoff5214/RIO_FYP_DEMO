@@ -20,3 +20,7 @@ li.active { border-color:var(--accent); } li small { float:right; color:var(--mu
 .cand { display:flex; gap:8px; align-items:flex-start; border:1px solid var(--line); padding:8px; color:var(--fg); }
 .err { color:var(--bad); } .ok { color:var(--ok); }
 @media (max-width:700px) { .layout { grid-template-columns:1fr; } aside { border-right:0; border-bottom:1px solid var(--line); } }
+.tabs { display:flex; gap:6px; } .tabs button { flex:1; }
+.preview { width:100%; border:1px solid var(--line); } .hint { color:var(--muted); font-size:13px; margin:0; }
+select { padding:6px 8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); font:inherit; }
+pre { overflow:auto; border:1px solid var(--line); padding:8px; font-size:12px; }

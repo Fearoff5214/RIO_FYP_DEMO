@@ -1,7 +1,7 @@
 """Stage 5: root-cause candidates from retrieved evidence. LLM when available, else evidence-only."""
 import re
 
-from . import llm
+from . import learning, llm
 
 REQUIRED = ("cause", "effect", "precautions", "sources")
 
@@ -70,5 +70,5 @@ def calibrate(causes: list[dict], evidence: list[dict], defects: list[dict], low
         conf = min(0.95, (0.5 * min(1.0, ret * 2) + 0.5 * det) * (1 - 0.12 * (rank - 1)))
         if low_evidence:
             conf *= 0.6
-        ranked.append({**c, "rank": rank, "confidence": round(conf * 100, 1)})
+        ranked.append({**c, "rank": rank, "confidence": learning.apply_calibration(rank, round(conf * 100, 1))})
     return ranked

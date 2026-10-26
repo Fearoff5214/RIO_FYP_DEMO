@@ -14,6 +14,11 @@ SAMPLES = config.ROOT / "samples"
 def env(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "t.db")
     monkeypatch.setattr(config, "REPORT_DIR", tmp_path / "reports")
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(config, "MODEL_VERSIONS_DIR", tmp_path / "versions")
+    monkeypatch.setattr(config, "ANOMALY_DIR", tmp_path / "anomaly")
+    for name in ("MES_URL", "QMS_URL", "ERP_URL", "NOTIFY_URL"):
+        monkeypatch.setattr(config, name, "")
     monkeypatch.setattr(config, "LLM_PROVIDER", "none")  # offline: hash embeddings, evidence-only RCA
     workflow.use_graph(workflow.build(MemorySaver()))
     rag.ingest_seed_dir()
@@ -32,7 +37,7 @@ def image(env):
 def detections(monkeypatch):
     """Control what the detector returns: detections['value'] = [...]."""
     box = {"value": [{"cls": "scratches", "conf": 0.9, "bbox": [10, 10, 80, 60], "source": "test"}]}
-    monkeypatch.setattr("backend.app.graph.nodes.detector.detect", lambda p: [dict(d) for d in box["value"]])
+    monkeypatch.setattr("backend.app.graph.nodes.detector.detect", lambda p, *a: [dict(d) for d in box["value"]])
     return box
 
 

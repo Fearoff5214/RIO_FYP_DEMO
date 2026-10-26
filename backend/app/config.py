@@ -51,3 +51,29 @@ EXPOSURE_RANGE = (40.0, 220.0)  # mean gray level
 RETRIEVE_TOP_K = 5
 RETRIEVE_MIN_SIM = 0.15
 RETRIEVE_MIN_HITS = 2
+
+# Stage 3 extras. SAM refines YOLO boxes into masks; the anomaly model flags defects YOLO was never trained on.
+SAM_ENABLED = _env("SAM_ENABLED", "1") == "1"
+SAM_WEIGHTS = _env("SAM_WEIGHTS", str(ROOT / "models" / "sam" / "mobile_sam.pt"))  # sam_b.pt = full SAM-B (~375 MB)
+ANOMALY_ENABLED = _env("ANOMALY_ENABLED", "1") == "1"
+ANOMALY_DIR = Path(_env("ANOMALY_DIR", str(ROOT / "models" / "anomaly")))
+GOOD_IMAGES_DIR = Path(_env("GOOD_IMAGES_DIR", str(ROOT / "data" / "good")))
+
+# Camera (phone via Iriun Webcam appears as a normal webcam device)
+CAMERA_DEFAULT_DEVICE = int(_env("CAMERA_DEFAULT_DEVICE", "1"))
+CAMERA_WIDTH = int(_env("CAMERA_WIDTH", "1280"))
+CAMERA_HEIGHT = int(_env("CAMERA_HEIGHT", "720"))
+
+# Output connectors (Stage 8). Empty URL = connector disabled.
+MES_URL = _env("MES_URL", "")
+QMS_URL = _env("QMS_URL", "")
+ERP_URL = _env("ERP_URL", "")
+NOTIFY_URL = _env("NOTIFY_URL", "")  # e-mail gateway / chat webhook
+INTEGRATION_TOKEN = _env("INTEGRATION_TOKEN", "")
+INTEGRATION_ATTEMPTS = int(_env("INTEGRATION_ATTEMPTS", "4"))
+
+# Learning
+MODEL_VERSIONS_DIR = Path(_env("MODEL_VERSIONS_DIR", str(ROOT / "models" / "versions")))
+RETRAIN_MIN_LABELS = int(_env("RETRAIN_MIN_LABELS", "20"))
+AUTO_RETRAIN = _env("AUTO_RETRAIN", "0") == "1"
+RECAL_MIN_SAMPLES = int(_env("RECAL_MIN_SAMPLES", "10"))
