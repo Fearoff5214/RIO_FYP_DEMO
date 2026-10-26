@@ -1,4 +1,6 @@
 """Stage 5: root-cause candidates from retrieved evidence. LLM when available, else evidence-only."""
+import re
+
 from . import llm
 
 REQUIRED = ("cause", "effect", "precautions", "sources")
@@ -40,14 +42,22 @@ def generate(defects, dim_status, part, evidence) -> list[dict] | None:
     return validate(llm.chat_json(SYSTEM, _prompt(defects, dim_status, part, evidence)), len(evidence))
 
 
+def _field(text: str, name: str, stop: str) -> str:
+    m = re.search(rf"{name}:\s*(.*?)(?=\s*(?:{stop}):|$)", text, re.S)
+    return m.group(1).strip() if m else ""
+
+
 def from_evidence(evidence: list[dict]) -> list[dict]:
-    """No-LLM fallback: surface the top evidence chunks as candidate causes, labelled as such."""
+    """No-LLM fallback: read Cause / Effect / Precautions fields from the top evidence chunks."""
     out = []
     for i, e in enumerate(evidence[:3]):
-        first = e["text"].strip().split("\n")[0][:160]
-        out.append({"cause": first, "effect": "See source document.",
-                    "precautions": [e["text"].strip()[:300]], "sources": [i + 1],
-                    "rationale": f"Taken directly from {e['source']} (no LLM available)."})
+        t = e["text"]
+        cause = _field(t, "Cause", "Effect|Precautions")
+        out.append({"cause": cause or t.strip().split("\n")[0][:160],
+                    "effect": _field(t, "Effect", "Precautions") or "See source document.",
+                    "precautions": [p.strip() for p in _field(t, "Precautions", "$^").split(",") if p.strip()]
+                    or [t.strip()[:300]],
+                    "sources": [i + 1], "rationale": f"Taken directly from {e['source']} (no LLM available)."})
     return out
 
 

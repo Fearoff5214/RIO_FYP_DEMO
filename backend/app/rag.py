@@ -30,18 +30,25 @@ def parse_file(path: Path) -> str:
 
 
 def chunk(text: str, max_chars: int = 700) -> list[str]:
-    """Paragraph-based chunks, merged up to max_chars."""
-    out, cur = [], ""
+    """One chunk per paragraph (so a chunk answers about one defect); tiny paragraphs and
+    headings are folded into the next one, and over-long paragraphs are split on sentences."""
+    out, carry = [], ""
     for para in re.split(r"\n\s*\n", text):
         para = para.strip()
         if not para:
             continue
-        if cur and len(cur) + len(para) > max_chars:
-            out.append(cur)
-            cur = ""
-        cur = f"{cur}\n\n{para}".strip()
-    if cur:
-        out.append(cur)
+        if len(para) < 80:
+            carry = f"{carry}\n{para}".strip()
+            continue
+        para = f"{carry}\n{para}".strip()
+        carry = ""
+        while len(para) > max_chars:
+            cut = para.rfind(". ", 0, max_chars) + 1 or max_chars
+            out.append(para[:cut].strip())
+            para = para[cut:].strip()
+        out.append(para)
+    if carry:
+        out.append(carry)
     return out
 
 
