@@ -1,0 +1,17 @@
+# Core (installed in .venv already except fastapi)
+fastapi
+uvicorn
+python-multipart
+langgraph
+langgraph-checkpoint-sqlite
+ultralytics
+opencv-python
+numpy
+ezdxf
+reportlab
+openpyxl
+python-docx
+requests
+python-dotenv
+pytest
+httpx

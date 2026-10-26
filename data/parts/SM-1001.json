@@ -1,0 +1,9 @@
+{
+  "name": "Hot-rolled steel plate 100x100",
+  "material": "hot-rolled steel",
+  "process": "hot rolling",
+  "drawing_rev": "B",
+  "dxf": "SM-1001.dxf",
+  "px_per_mm": 2.0,
+  "tolerance_mm": 5.0
+}

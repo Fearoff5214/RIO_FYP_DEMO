@@ -1,0 +1,9 @@
+# Optional: Ollama for local LLM + embeddings. The app itself runs from the project venv:
+#   uvicorn backend.app.main:app --reload
+services:
+  ollama:
+    image: ollama/ollama
+    ports: ["11434:11434"]
+    volumes: ["ollama:/root/.ollama"]
+volumes:
+  ollama:

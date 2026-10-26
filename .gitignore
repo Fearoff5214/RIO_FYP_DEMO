@@ -1,0 +1,9 @@
+.venv/
+.env
+__pycache__/
+.pytest_cache/
+runs/
+knowledge_base/index/
+*.log
+node_modules/
+frontend/dist/
