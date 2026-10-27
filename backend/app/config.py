@@ -63,6 +63,9 @@ GOOD_IMAGES_DIR = Path(_env("GOOD_IMAGES_DIR", str(ROOT / "data" / "good")))
 CAMERA_DEFAULT_DEVICE = int(_env("CAMERA_DEFAULT_DEVICE", "1"))
 CAMERA_WIDTH = int(_env("CAMERA_WIDTH", "1280"))
 CAMERA_HEIGHT = int(_env("CAMERA_HEIGHT", "720"))
+WATCH_HOLD_SECONDS = float(_env("WATCH_HOLD_SECONDS", "1.5"))
+WATCH_PRESENCE_MIN = float(_env("WATCH_PRESENCE_MIN", "0.04"))
+WATCH_DIFF_THR = float(_env("WATCH_DIFF_THR", "25"))
 
 # Output connectors (Stage 8). Empty URL = connector disabled.
 MES_URL = _env("MES_URL", "")

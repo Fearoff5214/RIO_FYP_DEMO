@@ -30,6 +30,13 @@ def _detect_yolo(path: Path) -> list[dict]:
             for b in res.boxes]
 
 
+def detect_frame(frame) -> list[dict]:
+    """YOLO only, on an in-memory frame: for the live watch-mode overlay (no SAM, no anomaly)."""
+    from .. import learning
+    res = _yolo(str(learning.active_weights())).predict(frame, conf=config.CONF_THRESHOLD, verbose=False)[0]
+    return [{"cls": res.names[int(b.cls)], "conf": float(b.conf), "bbox": b.xyxy[0].tolist()} for b in res.boxes]
+
+
 def _detect_manifest(path: Path) -> list[dict]:
     manifest = Path(config.ROOT / "samples" / "manifest.json")
     if not manifest.exists():

@@ -84,6 +84,7 @@ thousands of chunks, replace `rag.search` with a pgvector query.
 | `GET /jobs`, `GET /jobs/{id}` | list; detail = job row + graph state + pending gate + audit |
 | `POST /jobs/{id}/gate` (answer JSON) | resolve the pending gate (409 if none) |
 | `GET /jobs/{id}/report/{pdf\|xlsx\|docx}` | download |
+| `POST /watch/start` `{part_number, device, live_boxes}`, `POST /watch/stop`, `GET /watch`, `GET /watch/stream` | watch mode: auto-inspect when a part is shown (`watcher.py`) |
 | `GET /camera/devices`, `GET /camera/stream?device=`, `POST /camera/release` | camera |
 | `POST /kb/upload` | add a document to the knowledge base |
 | `GET /actions`, `POST /actions/{id}/close` `{effective, evidence}` | corrective actions (L9) |

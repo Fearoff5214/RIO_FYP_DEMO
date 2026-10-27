@@ -17,6 +17,7 @@ What is covered, by file (`backend/tests/`):
 | `test_workflow.py` | full graph through all gates; fast path (no defect); loops L1, L2, L3, L4, L5, L6, L7, L8; label review (L10 signal); operator alert (abort / retake / accept); resume after restart |
 | `test_stage3_extras.py` | anomaly model fit/score/localisation; unseen defect -> `unknown_anomaly` below review threshold; no duplicate when YOLO already explains it; SAM failure degrades safely; real SAM mask |
 | `test_camera_integrations_learning.py` | camera recipe changes and recapture (fake camera); camera failure fallback; MES/QMS/ERP/notify message shapes; outage -> outbox -> retry with no duplicates; job survives connector outage; recalibration; dataset export; retrain promote/reject/unvalidated; rollback |
+| `test_watch.py` | watch mode: one trigger per part, no trigger while moving / on lighting drift / small objects, re-arm after removal, job started from a fake camera, camera failure |
 | `test_units.py` | image quality, detection fusion, dimensional measurement, root-cause validation, KB chunking/search, re-embedding on embedder change, corrective-action loop L9 |
 
 **Not covered by automated tests** (needs a human, see section 2): the web UI, a real phone
@@ -60,6 +61,10 @@ Start the app (`.\scripts\run.ps1 -Mock`) and open http://localhost:8000. Tick a
 - [ ] Find cameras lists the phone; Live preview shows the picture; Capture and inspect starts a job.
 - [ ] Cover the lens (dark picture): expect automatic recaptures, then the operator alert.
 - [ ] Unplug/close Iriun mid-job: expect flag `camera_error` and no crash.
+
+- [ ] Watch mode: Start watching, keep the view empty, place a part and let go: expect "Hold still",
+      then a job in the *Started* list. Leave the part: no second job. Remove it, show another: a new job.
+      Wave a hand through the view: no job. Live boxes appear on a defective part.
 
 ### Integrations
 - [ ] With `-Mock` and the four URLs set in `.env`: finish a job; Outbox shows 4 `sent`;

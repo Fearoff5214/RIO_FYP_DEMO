@@ -48,6 +48,26 @@ or focus, then **Retake** (for a camera job this takes new pictures; for an uplo
 the same photo, so start a new job with a better photo instead). **Accept as is** is recorded in the report; **Abort job** puts the
 job on hold. An unusable image never becomes an automatic OK.
 
+## Watch mode: inspect without pressing anything
+
+*New inspection > Phone camera > Watch mode > Start watching.* Fix the phone on a stand
+pointing at a plain surface, then:
+
+1. Keep the view empty for about a second ("Learning the empty view").
+2. Place a part in view and let go. The banner says "Hold still..." with a progress bar; after
+   about 1.5 seconds of no movement the sharpest frame is taken and a normal inspection starts.
+3. The job appears in the *Started* list under the video; click it to open the review gates.
+4. Remove the part. When the view is empty again the next part can be shown.
+
+Live red boxes on the video are a quick YOLO preview only (a few per second). The recorded
+result comes from the full pipeline (quality check, SAM, anomaly model). The part number is fixed
+for the whole watching session: stop and restart to change it. Watching holds the camera, so
+*Live preview* and *Capture and inspect* are unavailable until you stop.
+
+Tips: fixed mount, steady light, plain background, no shadows moving. A part larger than half the
+view, or a background that changes, will cause missed or false triggers. Tune with
+`WATCH_HOLD_SECONDS`, `WATCH_PRESENCE_MIN`, `WATCH_DIFF_THR` ([DEPLOYMENT](DEPLOYMENT.md#configuration-reference)).
+
 ## The review points
 
 | Gate | Who | What to check | Your options |

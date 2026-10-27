@@ -111,7 +111,7 @@ hold it.
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-48 tests, about two minutes, no Ollama or camera needed. See [TESTING.md](TESTING.md).
+54 tests, about two minutes, no Ollama or camera needed. See [TESTING.md](TESTING.md).
 
 ## Developing the UI
 

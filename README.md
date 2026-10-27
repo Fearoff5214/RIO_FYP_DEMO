@@ -34,7 +34,7 @@ copy .env.example .env
 ```
 
 Details and the Iriun phone-camera setup are in [docs/SETUP.md](docs/SETUP.md). Try part
-`SM-1001` with an image from `samples/`. Run `pytest -q` to check the install (48 tests).
+`SM-1001` with an image from `samples/`. Run `pytest -q` to check the install (54 tests).
 
 ## Status and limits (short version)
 

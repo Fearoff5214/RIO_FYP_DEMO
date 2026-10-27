@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 import threading
 import time
 
-from . import camera, config, db, integrations, learning, rag
+from . import camera, config, db, integrations, learning, rag, watcher
 from .graph import workflow
 
 app = FastAPI(title="Novaliseo AI Quality Inspection")
@@ -139,6 +139,39 @@ def job_from_camera(part_number: str = Body(...), device: int = Body(config.CAME
         raise HTTPException(503, str(e))
     workflow.start_job(part_number, paths, job_id=job_id, source={"type": "camera", "device": device}, recipe=recipe)
     return {"job_id": job_id}
+
+
+@app.post("/api/watch/start")
+def watch_start(part_number: str = Body(...), device: int = Body(config.CAMERA_DEFAULT_DEVICE),
+                live_boxes: bool = Body(True)):
+    try:
+        camera.grab(device)
+    except camera.CameraError as e:
+        raise HTTPException(503, str(e))
+    try:
+        return watcher.start(part_number, device, live_boxes).status()
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.post("/api/watch/stop")
+def watch_stop():
+    watcher.stop()
+    return {"ok": True}
+
+
+@app.get("/api/watch")
+def watch_status():
+    w = watcher.current()
+    return w.status() if w else {"running": False, "state": "off", "jobs": []}
+
+
+@app.get("/api/watch/stream")
+def watch_stream():
+    w = watcher.current()
+    if not w or not w.running:
+        raise HTTPException(409, "not watching")
+    return StreamingResponse(w.mjpeg(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
 @app.post("/api/camera/release")

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, post } from './api.js'
+import Watch from './Watch.jsx'
 
 export default function NewJob({ onCreated }) {
   const [part, setPart] = useState('SM-1001')
@@ -75,6 +76,7 @@ export default function NewJob({ onCreated }) {
           )}
         </div>
       )}
+      {mode === 'camera' && <Watch part={part} device={device} onOpen={onCreated} />}
       <button disabled={busy}>{busy ? 'Working…' : mode === 'camera' ? 'Capture and inspect' : 'Start'}</button>
       {err && <p className="err">{err}</p>}
     </form>

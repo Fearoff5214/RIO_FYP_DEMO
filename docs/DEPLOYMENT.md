@@ -69,6 +69,7 @@ All optional, in `.env` (see `.env.example`). Retry limits (L1-L8) are in `backe
 | `ANOMALY_ENABLED` | `1` | no effect until a model is fitted |
 | `BLUR_MIN`, `GLARE_MAX` | `20`, `0.15` | image-quality limits; tune per camera |
 | `CAMERA_DEFAULT_DEVICE`, `CAMERA_WIDTH`, `CAMERA_HEIGHT` | `1`, `1280`, `720` | |
+| `WATCH_HOLD_SECONDS`, `WATCH_PRESENCE_MIN`, `WATCH_DIFF_THR` | `1.5`, `0.04`, `25` | watch mode: stillness time, minimum covered fraction of the view, pixel-change threshold |
 | `MES_URL`, `QMS_URL`, `ERP_URL`, `NOTIFY_URL` | empty = off | see below |
 | `INTEGRATION_TOKEN` | empty | sent as `Authorization: Bearer ...` |
 | `INTEGRATION_ATTEMPTS` | `4` | attempts per message per round |
