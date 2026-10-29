@@ -1,113 +1,115 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { ArrowRight, ArrowUpRight, ClipboardList, Plus } from 'lucide-react'
 import { jobsApi, type Job } from '../api'
 
-const STATUS_COLORS: Record<string, string> = {
-  CREATED: 'bg-gray-700',
-  CAPTURING: 'bg-blue-800',
-  DIMENSIONAL: 'bg-blue-700',
-  AWAIT_GATE1: 'bg-yellow-700',
-  DEFECT_DETECTION: 'bg-purple-700',
-  AWAIT_LABEL_REVIEW: 'bg-orange-700',
-  RETRIEVAL: 'bg-indigo-700',
-  PREDICTION: 'bg-violet-700',
-  AWAIT_GATE2: 'bg-yellow-700',
-  REPORTING: 'bg-teal-700',
-  AWAIT_GATE3: 'bg-yellow-700',
-  OUTPUT: 'bg-emerald-700',
-  CLOSED: 'bg-green-800',
-  ON_HOLD: 'bg-red-800',
-  FAILED: 'bg-red-900',
+const STATUS_TONE: Record<string, string> = {
+  CREATED: 'status-neutral',
+  CAPTURING: 'status-blue',
+  DIMENSIONAL: 'status-blue',
+  AWAIT_GATE1: 'status-amber',
+  DEFECT_DETECTION: 'status-violet',
+  AWAIT_LABEL_REVIEW: 'status-amber',
+  RETRIEVAL: 'status-blue',
+  PREDICTION: 'status-violet',
+  AWAIT_GATE2: 'status-amber',
+  REPORTING: 'status-teal',
+  AWAIT_GATE3: 'status-amber',
+  OUTPUT: 'status-green',
+  CLOSED: 'status-green',
+  ON_HOLD: 'status-red',
+  FAILED: 'status-red',
 }
 
 export default function Jobs() {
-  const { data: jobs = [], isLoading, refetch } = useQuery({
+  const { data: jobs = [], isLoading } = useQuery({
     queryKey: ['jobs'],
     queryFn: () => jobsApi.list().then((r) => r.data),
     refetchInterval: 5_000,
   })
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-blue-300">Inspection Jobs</h1>
-        <Link
-          to="/jobs/new"
-          className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm"
-        >
-          + New Inspection
-        </Link>
+    <div className="space-y-6">
+      <div className="page-heading">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold tracking-[0.12em] text-slate-400">
+            <span>QUALITY OPERATIONS</span><span className="text-slate-300">/</span><span className="text-slate-500">HISTORY</span>
+          </div>
+          <h1>Inspection history</h1>
+          <p>Review jobs and follow their progress through the quality workflow.</p>
+        </div>
+        <Link to="/jobs/new" className="btn-primary"><Plus size={15} /> New inspection</Link>
       </div>
 
-      {isLoading ? (
-        <div className="text-gray-400">Loading...</div>
-      ) : jobs.length === 0 ? (
-        <div className="text-gray-500 py-10 text-center">
-          No jobs yet.{' '}
-          <Link to="/jobs/new" className="text-blue-400 underline">
-            Start an inspection
-          </Link>
+      <section className="panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+          <div>
+            <h2 className="panel-title">Inspection jobs</h2>
+            <p className="mt-1 text-[11px] text-slate-500">Most recent jobs are shown first</p>
+          </div>
+          <span className="status-pill status-neutral">{jobs.length} records</span>
         </div>
-      ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-gray-400 border-b border-gray-800">
-              <th className="text-left py-2">Job ID</th>
-              <th className="text-left py-2">Part</th>
-              <th className="text-left py-2">Status</th>
-              <th className="text-left py-2">Stage</th>
-              <th className="text-left py-2">Created</th>
-              <th className="text-left py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(jobs as Job[]).map((job) => (
-              <tr key={job.job_id} className="border-b border-gray-900 hover:bg-gray-900 transition">
-                <td className="py-2 font-mono text-xs text-gray-400">{job.job_id.slice(0, 8)}…</td>
-                <td className="py-2 font-semibold">{job.part_number ?? '—'}</td>
-                <td className="py-2">
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      STATUS_COLORS[job.status] ?? 'bg-gray-700'
-                    }`}
-                  >
-                    {job.status}
-                  </span>
-                </td>
-                <td className="py-2 text-gray-400">{job.current_stage ?? '—'}</td>
-                <td className="py-2 text-gray-500 text-xs">
-                  {new Date(job.created_at).toLocaleString()}
-                </td>
-                <td className="py-2">
-                  <Link to={`/jobs/${job.job_id}`} className="text-blue-400 hover:underline text-xs mr-2">
-                    Detail
-                  </Link>
-                  {job.status === 'AWAIT_GATE1' && (
-                    <Link to={`/jobs/${job.job_id}/gate1`} className="text-yellow-400 hover:underline text-xs mr-2">
-                      Gate 1
-                    </Link>
-                  )}
-                  {job.status === 'AWAIT_LABEL_REVIEW' && (
-                    <Link to={`/jobs/${job.job_id}/label`} className="text-orange-400 hover:underline text-xs mr-2">
-                      Label
-                    </Link>
-                  )}
-                  {job.status === 'AWAIT_GATE2' && (
-                    <Link to={`/jobs/${job.job_id}/gate2`} className="text-yellow-400 hover:underline text-xs mr-2">
-                      Gate 2
-                    </Link>
-                  )}
-                  {job.status === 'AWAIT_GATE3' && (
-                    <Link to={`/jobs/${job.job_id}/gate3`} className="text-yellow-400 hover:underline text-xs mr-2">
-                      Gate 3
-                    </Link>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+
+        {isLoading ? (
+          <div className="p-8 text-center text-xs text-slate-500">Loading inspection history…</div>
+        ) : jobs.length === 0 ? (
+          <div className="px-5 py-12 text-center">
+            <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-slate-50 text-slate-400"><ClipboardList size={19} /></div>
+            <p className="text-sm font-semibold text-slate-700">No inspections yet</p>
+            <p className="mt-1 text-xs text-slate-500">Start an inspection to create the first job record.</p>
+            <Link to="/jobs/new" className="btn-primary mt-4"><Plus size={14} /> Start an inspection</Link>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead className="bg-slate-50/80 text-[10px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-5 py-3 font-semibold">Job reference</th>
+                  <th className="px-5 py-3 font-semibold">Part number</th>
+                  <th className="px-5 py-3 font-semibold">Status</th>
+                  <th className="px-5 py-3 font-semibold">Stage</th>
+                  <th className="px-5 py-3 font-semibold">Created</th>
+                  <th className="px-5 py-3 font-semibold">Review</th>
+                  <th className="px-5 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {(jobs as Job[]).map((job) => (
+                  <tr key={job.job_id} className="border-t border-slate-100 hover:bg-slate-50/70">
+                    <td className="px-5 py-3.5 font-mono text-[11px] text-slate-500">{job.job_id.slice(0, 8).toUpperCase()}</td>
+                    <td className="px-5 py-3.5 font-semibold text-slate-700">{job.part_number ?? '—'}</td>
+                    <td className="px-5 py-3.5">
+                      <span className={`status-pill ${STATUS_TONE[job.status] ?? 'status-neutral'}`}>{job.status.replace(/_/g, ' ')}</span>
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-500">{job.current_stage ?? '—'}</td>
+                    <td className="px-5 py-3.5 text-slate-500">{new Date(job.created_at).toLocaleString()}</td>
+                    <td className="px-5 py-3.5">
+                      {job.status === 'AWAIT_GATE1' && <ReviewLink to={`/jobs/${job.job_id}/gate1`} label="Gate 1" tone="status-amber" />}
+                      {job.status === 'AWAIT_LABEL_REVIEW' && <ReviewLink to={`/jobs/${job.job_id}/label`} label="Label review" tone="status-amber" />}
+                      {job.status === 'AWAIT_GATE2' && <ReviewLink to={`/jobs/${job.job_id}/gate2`} label="Gate 2" tone="status-violet" />}
+                      {job.status === 'AWAIT_GATE3' && <ReviewLink to={`/jobs/${job.job_id}/gate3`} label="Gate 3" tone="status-teal" />}
+                      {!['AWAIT_GATE1', 'AWAIT_LABEL_REVIEW', 'AWAIT_GATE2', 'AWAIT_GATE3'].includes(job.status) && <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <Link to={`/jobs/${job.job_id}`} className="inline-flex items-center gap-1 font-semibold text-[#426f98] hover:text-[#244e74]">
+                        Details <ArrowUpRight size={13} />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
+  )
+}
+
+function ReviewLink({ to, label, tone }: { to: string; label: string; tone: string }) {
+  return (
+    <Link to={to} className={`status-pill ${tone} hover:brightness-[0.98]`}>
+      {label}<ArrowRight size={11} />
+    </Link>
   )
 }

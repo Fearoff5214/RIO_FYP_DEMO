@@ -62,10 +62,40 @@ export interface RootCause {
 }
 
 export const jobsApi = {
-  create: (partNumber: string, imageUris?: string[]) =>
-    api.post<Job>('/jobs', { part_number: partNumber, image_uris: imageUris ?? [] }),
+  create: (partNumber: string, imageUris?: string[], verificationId?: string) =>
+    api.post<Job>('/jobs', {
+      part_number: partNumber,
+      image_uris: imageUris ?? [],
+      verification_id: verificationId,
+    }),
   list: () => api.get<Job[]>('/jobs'),
   get: (id: string) => api.get<any>(`/jobs/${id}`),
+}
+
+export const partsApi = {
+  list: () => api.get<any[]>('/parts'),
+  references: (partNumber: string) =>
+    api.get<any>(`/parts/${encodeURIComponent(partNumber)}/references`),
+  referenceImage: (partNumber: string, kind: 'cad' | 'image') =>
+    api.get(
+      `/parts/${encodeURIComponent(partNumber)}/references/${kind}`,
+      { responseType: 'blob' },
+    ),
+  uploadReferences: (partNumber: string, cadImage: File, referenceImage: File) => {
+    const form = new FormData()
+    form.append('cad_image', cadImage)
+    form.append('reference_image', referenceImage)
+    return api.put(`/parts/${encodeURIComponent(partNumber)}/references`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  verify: (partNumber: string, image: Blob) => {
+    const form = new FormData()
+    form.append('image', image, 'capture.jpg')
+    return api.post<any>(`/parts/${encodeURIComponent(partNumber)}/verify`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }
 
 export const gatesApi = {

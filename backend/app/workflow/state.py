@@ -13,6 +13,8 @@ class InspectionState(TypedDict, total=False):
     part_number: str
     part_master: dict          # raw part_master row as dict
     thread_id: str
+    image_uris: list[str]
+    part_verification_id: str | None
 
     # ── Stage 1: capture ──────────────────────────────────────────────────
     camera_recipe: dict

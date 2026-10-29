@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -24,6 +24,7 @@ class CreateJobRequest(BaseModel):
     part_number: str
     image_uris: list[str] = []
     trigger_source: str = "api"
+    verification_id: str | None = None
 
 
 class JobResponse(BaseModel):
@@ -43,16 +44,23 @@ async def create_job(
     user: dict = Depends(get_current_user),
 ):
     """Create a new inspection job and start the workflow."""
-    from app.workflow.graph import get_compiled_graph
-    from app.cv.camera.upload import UploadCamera
     from app.db.models import InspectionJob
 
     job_id = str(uuid.uuid4())
     thread_id = f"thread-{job_id}"
 
-    # Set upload URIs if provided
-    if req.image_uris:
-        UploadCamera.set_pending(req.image_uris)
+    image_uris = req.image_uris
+    if req.verification_id:
+        from app.api.parts import _verified_captures
+
+        verification = _verified_captures.get(req.verification_id)
+        if not verification:
+            raise HTTPException(status_code=409, detail="Part verification expired or was already used.")
+        if verification["part_number"] != req.part_number:
+            raise HTTPException(status_code=409, detail="Verified capture belongs to a different part.")
+        if verification["status"] != "Match":
+            raise HTTPException(status_code=409, detail="Part verification did not pass; inspection cannot start.")
+        image_uris = [verification["image_uri"]]
 
     # Persist job
     job = InspectionJob(
@@ -71,6 +79,8 @@ async def create_job(
     initial_state = {
         "job_id": job_id,
         "part_number": req.part_number,
+        "image_uris": image_uris,
+        "part_verification_id": req.verification_id,
         "thread_id": thread_id,
         "loops": {},
         "flags": [],
@@ -83,6 +93,8 @@ async def create_job(
         thread_id=thread_id,
         initial_state=initial_state,
     )
+    if req.verification_id:
+        _verified_captures.pop(req.verification_id, None)
 
     return JobResponse(
         job_id=job_id,
@@ -90,14 +102,14 @@ async def create_job(
         status="CREATED",
         current_stage=1,
         thread_id=thread_id,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
 
 
 async def _run_workflow(job_id: str, thread_id: str, initial_state: dict) -> None:
     """Run the LangGraph workflow asynchronously."""
-    from app.workflow.graph import get_compiled_graph
     from app.core.logging import get_logger
+    from app.workflow.graph import get_compiled_graph
     logger = get_logger(__name__)
 
     try:
@@ -121,6 +133,7 @@ async def list_jobs(
 ):
     """List all inspection jobs."""
     from sqlalchemy import select
+
     from app.db.models import InspectionJob
 
     result = await db.execute(select(InspectionJob).order_by(InspectionJob.created_at.desc()).limit(100))
@@ -147,7 +160,8 @@ async def get_job(
 ):
     """Get job detail including state, timeline, measurements, defects."""
     from sqlalchemy import select
-    from app.db.models import InspectionJob, DimensionResult, Defect, GateDecision
+
+    from app.db.models import Defect, DimensionResult, GateDecision, InspectionJob
 
     result = await db.execute(select(InspectionJob).where(InspectionJob.job_id == job_id))
     job = result.scalar_one_or_none()
@@ -214,7 +228,6 @@ async def get_job(
 @router.get("/{job_id}/events")
 async def job_events(job_id: str, user: dict = Depends(get_current_user)):
     """SSE stream of job status events."""
-    from app.db.models import InspectionJob
 
     async def event_stream():
         import json
@@ -245,12 +258,13 @@ async def rescan_job(
 ):
     """L1 operator rescan — provide/correct the part number."""
     from sqlalchemy import update
+
     from app.db.models import InspectionJob
 
     await db.execute(
         update(InspectionJob)
         .where(InspectionJob.job_id == job_id)
-        .values(part_number=part_number, updated_at=datetime.now(timezone.utc))
+        .values(part_number=part_number, updated_at=datetime.now(UTC))
     )
     await db.commit()
 

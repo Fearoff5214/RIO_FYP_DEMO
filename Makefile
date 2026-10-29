@@ -17,7 +17,7 @@ install:
 
 dev:
 	@echo "Starting Novaliseo API..."
-	uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+	uvicorn app.main:app --app-dir backend --reload --host 0.0.0.0 --port 8000
 
 migrate:
 	cd backend && alembic upgrade head

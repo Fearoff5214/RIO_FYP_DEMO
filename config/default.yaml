@@ -16,6 +16,9 @@ image_quality:
   glare_max_ratio: 0.02
   exposure_clip_max: 0.05
 
+part_verification:
+  score_threshold: 0.55
+
 dimensional:
   default_tolerance_mm: 0.10
   subpixel: true

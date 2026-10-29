@@ -13,7 +13,7 @@ copy .env.example .env
 
 # 3. Start API server
 $env:NOVALISEO_MODE="mock"
-py -m uvicorn backend.app.main:app --reload --port 8000
+py -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
 
 # 4. Load sample knowledge base (in another terminal)
 py scripts/load_kb.py
@@ -22,6 +22,39 @@ py scripts/load_kb.py
 # API: http://localhost:8000/docs
 # Frontend: cd frontend && npm install && npm run dev → http://localhost:5173
 ```
+
+## Live Iriun Capture and Part Verification
+
+1. Install and start Iriun Webcam on the phone and computer, connect them to the
+   same network, and confirm that **Iriun Webcam** appears as a camera in Windows.
+2. Start the API and frontend as above, open **New Job**, enter the registered
+   part number, and allow the browser to use the camera. The capture screen
+   automatically selects Iriun when the browser reports it; otherwise select it
+   from the camera list.
+3. Before the first inspection of a part, an administrator must upload its
+   matching raster CAD export and reference photograph in the reference section
+   on the New Job screen. Export a clear 2D view of the drawing as PNG or JPG.
+   The pair is stored with that part number under
+   `data/part_references/<part-number>/`; the existing part drawing URI is kept.
+4. Capture manually, or enable automatic capture to take an image after the
+   camera view is steady and detailed. Compare the captured image to the CAD
+   reference. Only a **Match** enables **Continue to Inspection**; mismatch and
+   inconclusive results require recapture or manual review. A passing capture
+   is sent to the existing inspection workflow rather than replaced by the mock
+   camera.
+
+The comparison uses contrast normalization, ORB visual features, RANSAC
+geometric alignment, and aligned edge overlap. It is an initial verification
+aid, not a calibrated metrology result: camera angle, lighting, focus, and CAD
+view should be controlled and the threshold validated against real parts.
+Adjust `part_verification.score_threshold` in `config/default.yaml` (default
+`0.55`) after testing. Each part's CAD and photograph must be the correct
+matching reference pair; the API selects them by the entered part number.
+
+Automatic capture checks that the frame is stable and has image detail; it does
+not identify the part or guarantee its physical placement. Keep the whole part
+inside the on-screen guide. Camera capture requires browser camera permission
+and a secure context (localhost is supported).
 
 ## Running Tests
 

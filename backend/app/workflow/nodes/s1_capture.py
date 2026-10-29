@@ -4,7 +4,6 @@ Stage 1 — Trigger, Context & Image Capture nodes.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 
 from app.core.config import get_config
 from app.core.logging import get_logger
@@ -32,6 +31,7 @@ async def load_part_master(state: InspectionState, *, db=None) -> dict:
 
     if db is not None:
         from sqlalchemy import select
+
         from app.db.models import PartMaster
 
         result = await db.execute(select(PartMaster).where(PartMaster.part_number == part_number))
@@ -68,8 +68,8 @@ async def create_job(state: InspectionState, *, db=None) -> dict:
     logger.info('"node":"create_job","job_id":"%s"', job_id)
 
     if db is not None:
-        from app.db.models import InspectionJob
         from app.db.audit import write_audit
+        from app.db.models import InspectionJob
 
         job = InspectionJob(
             job_id=job_id,
@@ -114,14 +114,28 @@ async def capture_images(state: InspectionState) -> dict:
     """
     from app.cv.camera.factory import get_camera
 
-    cfg = get_config()
     recipe = state.get("camera_recipe", {}) or {}
     job_id = state.get("job_id", "unknown")
 
     logger.info('"node":"capture_images","job_id":"%s"', job_id)
 
-    camera = get_camera()
-    images = await camera.capture(recipe)
+    verified_uris = state.get("image_uris", []) or []
+    if verified_uris:
+        images = [
+            {
+                "uri": uri,
+                "angle": recipe.get("angles", ["top"])[index]
+                if index < len(recipe.get("angles", ["top"]))
+                else f"angle_{index}",
+                "kind": "raw",
+                "quality_score": None,
+                "meta": {"source": "verified_camera_capture"},
+            }
+            for index, uri in enumerate(verified_uris)
+        ]
+    else:
+        camera = get_camera()
+        images = await camera.capture(recipe)
 
     return {"images": images, "status": "PREPROCESSING"}
 

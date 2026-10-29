@@ -24,7 +24,7 @@ py -m pip install -r backend/requirements.txt
 
 # Start API
 $env:NOVALISEO_MODE="mock"
-py -m uvicorn backend.app.main:app --reload --port 8000
+py -m uvicorn app.main:app --app-dir backend --reload --port 8000
 # → Open http://localhost:8000/docs
 
 # Load sample knowledge base
