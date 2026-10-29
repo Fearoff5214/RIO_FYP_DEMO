@@ -1,9 +1,127 @@
-# Sheet Metal Defect Detection — Demo
+# NOVALISEO — AI-Driven Quality Inspection & Root Cause Intelligence Platform
 
-YOLOv8-based surface defect detection: pick a frame source (upload a file,
-try a bundled sample, point at a local file/folder, use a webcam, or — once
-hardware exists — an ESP32-CAM stream), get PASS/FAIL with bounding boxes
-and per-class counts in a Streamlit dashboard.
+> *Intelligent Inspection. Accurate Insights. Superior Quality.*
+
+Built on top of an existing YOLOv8 sheet-metal defect detection demo, Novaliseo is a full
+end-to-end agentic quality inspection platform with:
+
+- **8-stage workflow** (capture → dimensional → defect → RAG retrieval → AI prediction → expert review → report → learning)
+- **4 human gates** with LangGraph `interrupt()` — all resumable after restarts
+- **12 control loops** (L1–L12) with configurable retry limits and fallbacks
+- **Hybrid RAG** (dense + keyword + graph + cross-encoder rerank) for root-cause knowledge
+- **3 report formats** (PDF, Excel, Word) with e-signature and archival
+- **Continuous learning** (label correction → retrain, RCA → KB, feedback → calibration)
+- **React + Vite + Tailwind** frontend with 10 role-aware pages
+- **Mock mode** — runs entirely without GPU, API keys, or camera hardware
+
+---
+
+## Quick Start (Mock Mode)
+
+```powershell
+# Install deps
+py -m pip install -r backend/requirements.txt
+
+# Start API
+$env:NOVALISEO_MODE="mock"
+py -m uvicorn backend.app.main:app --reload --port 8000
+# → Open http://localhost:8000/docs
+
+# Load sample knowledge base
+py scripts/load_kb.py
+
+# Run golden demo (reproduces infographic scenario)
+py scripts/run_demo.py
+```
+
+### Frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+# → Open http://localhost:5173
+```
+
+---
+
+## Running Tests
+
+```powershell
+$env:NOVALISEO_MODE="mock"
+$env:DATABASE_URL="sqlite+aiosqlite:///./novaliseo_test.db"
+py -m pytest backend/tests/ -v
+# → 43 passed
+```
+
+---
+
+## Default Demo Users
+
+| Username | Password | Role |
+|----------|----------|------|
+| operator | operator | Operator |
+| engineer | engineer | Quality Engineer (Gate 1, Label Review) |
+| expert | expert | Quality Expert (Gate 2) |
+| approver | approver | Approver (Gate 3) |
+| admin | admin | Admin |
+
+---
+
+## Infographic Demo Scenario (MS-4505-001 Sheet Metal Bracket)
+
+The mock mode reproduces the spec infographic exactly:
+- **Dimensional:** 120.05(+0.05)✓, 80.02(+0.02)✓, Ø11.70(-0.30)✗, 50.01(+0.01)✓
+- **Defects:** Scratch, Dent, Crack (76% confidence → triggers label review), Deformation
+- **Top-3 causes:** Improper Bending Force (92%), Material Inconsistency (78%), Tool Wear (71%)
+- **Report:** generated in PDF, Excel, Word with e-signature
+
+---
+
+## Architecture
+
+See `docs/ARCHITECTURE.md` for diagrams. Key components:
+- `backend/app/workflow/graph.py` — LangGraph state machine
+- `backend/app/workflow/nodes/` — 8 stage node implementations
+- `backend/app/cv/` — Camera adapters, drawing parsers, detectors, measurement
+- `backend/app/rag/` — Ingestion pipeline, hybrid retrieval, reranking
+- `backend/app/llm/` — Provider abstraction (fake/Anthropic/OpenAI)
+- `backend/app/reports/` — PDF/Excel/Word generation + e-signature
+- `frontend/src/pages/` — 10 React pages
+
+---
+
+## Switching to Real Mode
+
+See `docs/RUNBOOK.md` and `docs/BLOCKERS.md` for instructions on:
+- Using real YOLO weights (`models/best.pt` from the original demo works)
+- Connecting Anthropic/OpenAI for LLM-powered root cause analysis
+- Using a PostgreSQL database instead of SQLite
+- Connecting to real camera hardware (GenICam stub provided)
+
+---
+
+## Original Demo (Phase 1-2)
+
+The original YOLOv8 Streamlit demo is preserved at `src/`. Run it with:
+```
+streamlit run src/app.py
+```
+
+## Repo Layout
+
+```
+RIO_FYP/
+├── backend/          ← Novaliseo FastAPI + LangGraph backend
+├── frontend/         ← React + Vite + Tailwind frontend
+├── config/           ← default.yaml (all thresholds)
+├── docs/             ← AUDIT, ARCHITECTURE, API, RUNBOOK, DECISIONS, BLOCKERS
+├── scripts/          ← seed_demo.py, load_kb.py, run_demo.py
+├── src/              ← Original Streamlit demo (preserved)
+├── models/best.pt    ← Trained YOLOv8 weights
+└── samples/          ← Sample images and demo video
+```
+
 
 ## Status
 

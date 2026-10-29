@@ -1,0 +1,26 @@
+Material Inconsistency / Hardness Variation Root Cause Analysis
+
+Defect Types: crack, deformation, dimensional variation
+Material: SPCC steel, cold-rolled sheet metal
+
+Root Cause: Hardness variation in incoming material lot causes unpredictable
+springback behavior and susceptibility to cracking under forming operations.
+
+Effect: Cracking at bend radius, dimensional inaccuracy due to variable springback,
+surface defects from work hardening inconsistency.
+
+Corrective Actions:
+1. Verify material certificates against specification (yield strength, tensile strength, hardness)
+2. Conduct incoming material hardness inspection using Rockwell or Vickers test
+3. Segregate non-conforming material lots and return to supplier
+4. Re-inspect all parts manufactured from suspect material lot
+
+Preventive Actions:
+1. Perform supplier quality audit on material quality control processes
+2. Establish approved supplier list with material certification requirements
+3. Implement sampling inspection plan for incoming material lots
+4. Track material lot numbers in quality management system for traceability
+
+Process Notes:
+SPCC steel typical hardness: HRB 40-60. Variation >10 HRB within a lot indicates
+inconsistent processing and should trigger incoming inspection escalation.

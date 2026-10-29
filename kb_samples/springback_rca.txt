@@ -1,0 +1,25 @@
+Springback Root Cause Analysis
+
+Defect Types: deformation, dimensional inaccuracy
+Process: sheet metal bending
+
+Root Cause: Elastic recovery of sheet metal after forming (springback)
+causes the bent angle to open up beyond the intended angle.
+
+Effect: Dimensional inaccuracy in bent angles, parts out of tolerance
+on angular dimensions and related linear dimensions.
+
+Corrective Actions:
+1. Apply overbend compensation to tooling angle
+2. Test material springback coefficient for each lot
+3. Adjust bending program to compensate for measured springback
+
+Preventive Actions:
+1. Implement springback compensation in bending programs as standard
+2. Conduct springback testing on incoming material lots
+3. Use bottoming or coining process for critical angular tolerances
+4. Document springback coefficients by material grade and thickness
+
+Lubrication:
+Inadequate lubrication increases friction, affects springback behavior,
+and causes surface scratches. Use appropriate forming lubricant per material spec.

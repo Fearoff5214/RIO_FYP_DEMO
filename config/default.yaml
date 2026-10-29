@@ -1,0 +1,84 @@
+workflow:
+  retries:
+    L1: 3
+    L2: 3
+    L3: 2
+    L4: 2
+    L5: 2
+    L7: 3
+  gate_sla_hours:
+    reminder: 4
+    escalate: 24
+  separation_of_duties: true
+
+image_quality:
+  blur_min_laplacian_var: 100
+  glare_max_ratio: 0.02
+  exposure_clip_max: 0.05
+
+dimensional:
+  default_tolerance_mm: 0.10
+  subpixel: true
+
+detection:
+  models:
+    yolo: "models/best.pt"
+    sam: "models/sam_vit_b.pth"
+    anomalib: "models/patchcore"
+  label_review_confidence_threshold: 0.85
+  fusion_weights:
+    yolo: 0.5
+    sam: 0.2
+    anomalib: 0.3
+  severity_rules:
+    crack: critical
+    deformation: major
+    dent: major
+    scratch: minor
+
+retrieval:
+  dense_top_k: 30
+  keyword_top_k: 30
+  rerank_keep: 8
+  similarity_threshold: 0.55
+  min_chunks: 3
+  filter_relax_order:
+    - part
+    - process
+    - material
+
+prediction:
+  llm:
+    provider: fake  # change to: anthropic | openai | ollama
+    model: "claude-3-5-sonnet-20241022"
+    temperature: 0.2
+    max_tokens: 2000
+  confidence_weights:
+    retrieval: 0.5
+    history: 0.3
+    detection: 0.2
+  calibration:
+    method: isotonic
+    min_samples: 50
+
+learning:
+  retrain_min_new_labels: 200
+  promote_requires_metric_gain: true
+  threshold_change_requires_approval: true
+
+storage:
+  bucket: novaliseo
+  retention_days_raw: 365
+
+camera:
+  adapter: mock  # mock | folder | upload | genicam
+  folder_path: "samples/"
+
+embeddings:
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+  dimension: 384
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1

@@ -1,0 +1,27 @@
+Tool Wear / Die Damage Root Cause Analysis
+
+Defect Types: scratch, dent, edge burr, dimensional shift
+Process: bending, stamping, forming
+
+Root Cause: Progressive wear of punch/die tooling causes dimensional drift,
+surface scratches, edge burrs and dents on formed parts.
+
+Effect: Surface defects (scratches from worn tooling edges), dents from
+damaged die surfaces, edge burrs from worn cutting edges,
+gradual dimensional shift as tooling geometry changes.
+
+Corrective Actions:
+1. Inspect tooling under magnification for wear, chipping, or damage
+2. Regrind worn punch/die to restore geometry within tolerance
+3. Replace severely damaged tooling
+4. Perform first-article inspection after tooling change
+
+Preventive Actions:
+1. Implement regular tooling inspection schedule based on production cycle count
+2. Perform preventive maintenance per manufacturer-specified cycle count
+3. Regrind or replace worn dies proactively before defects appear
+4. Maintain tooling maintenance log and track wear progression
+5. Install tooling load monitoring to detect abnormal forces indicating wear
+
+Severity Note: Crack-like defects from die damage are classified as critical
+and require immediate production stop and 100% inspection of affected parts.

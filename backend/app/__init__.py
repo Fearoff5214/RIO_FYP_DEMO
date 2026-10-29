@@ -1,0 +1,1 @@
+"""Novaliseo backend application."""

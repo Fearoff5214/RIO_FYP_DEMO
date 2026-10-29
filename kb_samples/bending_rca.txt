@@ -1,0 +1,24 @@
+Improper Bending Force / Over Bending Root Cause Analysis
+
+Defect Types: deformation, dimensional inaccuracy
+Process: sheet metal bending, press brake operations
+
+Root Cause: Improper bending force settings or over-bending beyond the material's elastic limit.
+
+Effect: Deformation of the part, dimensional inaccuracy in bent features,
+springback issues causing part to not meet dimensional tolerances.
+
+Corrective Actions:
+1. Recalibrate press brake force settings to material specification
+2. Verify tonnage calculator against actual material hardness test results
+3. Implement first-article inspection before production run
+
+Preventive Actions:
+1. Optimize bending parameters to material specification before production
+2. Use proper tooling and punch/die sets matched to material thickness
+3. Regular machine calibration and force verification schedule
+4. Install force monitoring sensors on press brake
+
+Historical Cases:
+- 2023-Q1: Part MS-4505-001, deformation detected, cause confirmed as over-bending
+- 2023-Q3: Part MS-3301-002, dimensional fail, cause confirmed as improper bending force
