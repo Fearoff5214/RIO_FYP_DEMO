@@ -56,7 +56,18 @@ export default function Dashboard() {
   })
 
   if (isLoading) {
-    return <div className="rounded-lg border border-slate-200 bg-white p-8 text-sm text-slate-500">Loading quality overview…</div>
+    return (
+      <div className="space-y-7" aria-busy="true" aria-label="Loading quality overview">
+        <div className="skeleton h-16 w-full max-w-md" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-[112px]" />)}
+        </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="skeleton h-[290px]" />
+          <div className="skeleton h-[290px]" />
+        </div>
+      </div>
+    )
   }
 
   const k = kpis as KPI
@@ -214,10 +225,10 @@ function KpiCard({
     <div className="panel flex min-h-[112px] items-start justify-between gap-3 p-4">
       <div>
         <p className="text-[11px] font-medium text-slate-500">{label}</p>
-        <p className="mt-2 text-[25px] font-semibold leading-none tracking-tight text-slate-800 tabular-nums">{value}</p>
+        <p className="mt-2 text-[28px] font-bold leading-none tracking-tight text-slate-800 tabular-nums">{value}</p>
         <p className="mt-2 text-[10px] text-slate-400">{detail}</p>
       </div>
-      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-100 bg-slate-50 text-[#557d9f]">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e8f0f7] text-[#315f88]">
         <Icon size={17} strokeWidth={1.8} />
       </div>
     </div>

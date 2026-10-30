@@ -11,7 +11,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-optical-sizing: auto;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 * {
@@ -104,16 +104,16 @@ textarea:focus-visible {
 
 .brand-caption {
   margin-top: 3px;
-  color: #8a9aab;
-  font-size: 9px;
+  color: #7b8c9d;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
 }
 
 .sidebar-section-label {
   padding: 0 11px;
-  color: #9aa8b7;
-  font-size: 10px;
+  color: #7f8fa0;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.12em;
 }
@@ -136,8 +136,8 @@ textarea:focus-visible {
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 0 11px;
-  color: #617488;
-  font-size: 13px;
+  color: #546a80;
+  font-size: 13.5px;
   font-weight: 550;
   text-decoration: none;
 }
@@ -276,15 +276,15 @@ textarea:focus-visible {
 .page-heading h1 {
   margin: 0;
   color: #1b3249;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.035em;
 }
 
 .page-heading p {
   margin: 6px 0 0;
-  color: #74869a;
-  font-size: 12px;
+  color: #647990;
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -312,8 +312,8 @@ textarea:focus-visible {
 .field-label {
   display: block;
   margin-bottom: 6px;
-  color: #60758a;
-  font-size: 11px;
+  color: #536a80;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -376,7 +376,7 @@ textarea::placeholder {
   background: #fff;
   padding: 0 12px;
   color: #4c6278;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -392,9 +392,9 @@ textarea::placeholder {
   border: 1px solid #dce5ed;
   border-radius: 999px;
   background: #f7f9fb;
-  padding: 5px 9px;
+  padding: 4px 10px;
   color: #5d7084;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 650;
 }
 
@@ -589,10 +589,10 @@ textarea::placeholder {
 
 .data-table-wrap th {
   background: #f7f9fb;
-  color: #77899a;
-  font-size: 10px;
+  color: #667b8f;
+  font-size: 11px;
   font-weight: 650;
-  letter-spacing: 0.035em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -768,3 +768,138 @@ table {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Visual polish ---------- */
+:root {
+  --shadow-sm: 0 1px 2px rgb(26 49 73 / 5%), 0 1px 3px rgb(26 49 73 / 4%);
+  --shadow-md: 0 4px 14px rgb(26 49 73 / 8%);
+  --accent: #315f88;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background:
+    radial-gradient(1000px 420px at 85% -120px, rgb(49 95 136 / 7%), transparent 70%),
+    #f3f6fa;
+  background-attachment: fixed;
+}
+
+::selection { background: #cfe0f0; color: #17314b; }
+
+.app-sidebar { box-shadow: 1px 0 0 #e4eaf1, 6px 0 24px rgb(26 49 73 / 3%); }
+
+.brand-mark {
+  border-color: transparent;
+  background: linear-gradient(145deg, #3a6c98, #264d74);
+  color: #fff;
+  box-shadow: 0 4px 10px rgb(49 95 136 / 28%);
+}
+
+.sidebar-link { position: relative; }
+.sidebar-link-active::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.app-topbar { box-shadow: 0 1px 0 #e4eaf1, 0 4px 16px rgb(26 49 73 / 3%); }
+.topbar-eyebrow { font-size: 10.5px; }
+.topbar-title { font-size: 13px; }
+.topbar-workspace { font-size: 12px; }
+.app-footer { font-size: 11px; }
+
+.app-content { animation: page-in 260ms ease-out both; }
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.panel {
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+.panel:hover { box-shadow: var(--shadow-md); border-color: #d8e2ec; }
+
+.btn-primary {
+  background: linear-gradient(180deg, #3a6c98, #315f88);
+  box-shadow: 0 1px 2px rgb(36 78 116 / 30%), inset 0 1px 0 rgb(255 255 255 / 14%);
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  background: linear-gradient(180deg, #326190, #244e74);
+  box-shadow: 0 4px 12px rgb(36 78 116 / 28%);
+  transform: translateY(-1px);
+}
+.btn-primary:active { transform: none; box-shadow: none; }
+.btn-primary:disabled, .btn-secondary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-secondary { cursor: pointer; box-shadow: var(--shadow-sm); }
+.btn-secondary:hover { color: #234a6d; }
+
+.ui-input, input:not([type="checkbox"]):not([type="file"]), select, textarea {
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+input:not([type="checkbox"]):not([type="file"]):hover, select:hover, textarea:hover { border-color: #c3d1de; }
+input:not([type="checkbox"]):not([type="file"]):focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(49 95 136 / 15%);
+  outline: none;
+}
+
+.status-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.75;
+}
+.status-pill:has(svg)::before { display: none; }
+
+.data-table-wrap, table { font-variant-numeric: tabular-nums; }
+tbody tr { transition: background-color 120ms ease; }
+.panel table thead th { position: sticky; top: 0; }
+
+.inspection-step-current .inspection-step-number { box-shadow: 0 0 0 4px rgb(49 95 136 / 14%); }
+.inspection-step { font-size: 11px; }
+
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef2f6 25%, #f7f9fb 50%, #eef2f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+@media (max-width: 900px) {
+  .sidebar-link-active::before { display: none; }
+  .app-sidebar { position: sticky; top: 0; box-shadow: 0 1px 0 #e4eaf1; }
+  .app-topbar { position: static; }
+  .sidebar-nav { scrollbar-width: none; }
+  .sidebar-nav::-webkit-scrollbar { display: none; }
+}
+
+@media (max-width: 600px) {
+  :root { font-size: 14.5px; }
+  .page-heading h1 { font-size: 22px; }
+  .page-heading .btn-primary { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Raise the smallest arbitrary Tailwind sizes used across pages for legibility */
+.text-\[9px\] { font-size: 10.5px; }
+.text-\[10px\] { font-size: 11px; }
+.text-\[11px\] { font-size: 12px; }
+.text-xs { font-size: 12.5px; line-height: 1.5; }
+.text-slate-400 { color: #7d8ea0; }
+.text-slate-500 { color: #5f7488; }

@@ -51,7 +51,7 @@ export default function Jobs() {
         </div>
 
         {isLoading ? (
-          <div className="p-8 text-center text-xs text-slate-500">Loading inspection history…</div>
+          <div className="space-y-3 p-5" aria-busy="true">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-9" />)}</div>
         ) : jobs.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-slate-50 text-slate-400"><ClipboardList size={19} /></div>
