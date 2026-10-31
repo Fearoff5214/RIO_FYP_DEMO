@@ -310,9 +310,7 @@ export default function NewJob() {
     <div className="inspection-page space-y-5">
       <header className="page-heading">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold tracking-[0.12em] text-slate-400">
-            <span>QUALITY OPERATIONS</span><span className="text-slate-300">/</span><span className="text-slate-500">NEW JOB</span>
-          </div>
+          <div className="crumbs"><span>QUALITY OPS</span><span>/</span><b>NEW JOB</b></div>
           <h1>Live part inspection</h1>
           <p>Verify the physical component against its registered reference before starting AI inspection.</p>
         </div>
@@ -345,9 +343,9 @@ export default function NewJob() {
             required
           />
           {references && (
-            <p className="mt-2 text-[11px] text-slate-500">
-              <span className="font-semibold text-slate-700">{references.part_name}</span>
-              <span className="mx-2 text-slate-300">·</span>
+            <p className="mt-2 text-[11px] text-dim">
+              <span className="font-semibold text-ink">{references.part_name}</span>
+              <span className="mx-2 text-faint">·</span>
               Drawing revision {references.drawing_rev}
             </p>
           )}
@@ -359,23 +357,23 @@ export default function NewJob() {
       </section>
 
       {referenceError && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+        <div role="alert" className="alert alert-warn">
           <Info size={15} className="mt-0.5 shrink-0" />{referenceError}
         </div>
       )}
 
       <div className="inspection-workspace">
         <section className="panel overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3.5 sm:px-5">
             <div className="flex items-center gap-2.5">
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50 text-[#527b9e]"><Video size={16} /></div>
+              <div className="grid h-8 w-8 place-items-center rounded-lg bg-raised text-volt"><Video size={16} /></div>
               <div>
                 <h2 className="panel-title">Capture station</h2>
-                <p className="mt-0.5 text-[10px] text-slate-500">Position the component in the camera view</p>
+                <p className="mt-0.5 text-[10px] text-dim">Position the component in the camera view</p>
               </div>
             </div>
             <div className={`status-pill ${cameraActive ? 'status-green' : 'status-neutral'}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${cameraActive ? 'bg-green-600' : 'bg-slate-400'}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${cameraActive ? 'bg-mint' : 'bg-faint'}`} />
               {cameraActive ? (iriunDetected ? 'Iriun connected' : 'Camera connected') : 'Camera not connected'}
             </div>
           </div>
@@ -385,25 +383,25 @@ export default function NewJob() {
               <div className="min-w-0">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="eyebrow">Live feed</span>
-                  {cameraActive && <span className="flex items-center gap-1.5 text-[10px] text-emerald-700"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-600" />LIVE</span>}
+                  {cameraActive && <span className="flex items-center gap-1.5 text-[10px] text-mint"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-mint" />LIVE</span>}
                 </div>
                 <div className="camera-stage aspect-video">
                   {cameraActive ? (
                     <>
                       <video ref={videoRef} autoPlay playsInline muted className="relative z-[1] h-full w-full object-contain" />
-                      <div className="pointer-events-none absolute inset-[12%] z-[2] rounded border border-dashed border-white/75 shadow-[0_0_0_999px_rgba(27,43,59,0.12)]" />
-                      <div className="pointer-events-none absolute bottom-2 left-2 z-[3] rounded bg-slate-900/70 px-2 py-1 text-[9px] font-medium text-white">Center component in frame</div>
+                      <div className="pointer-events-none absolute inset-[12%] z-[2] rounded border border-dashed border-volt/80 shadow-[0_0_0_999px_rgba(0,0,0,0.45)]" />
+                      <div className="pointer-events-none absolute bottom-2 left-2 z-[3] rounded bg-black/70 px-2 py-1 text-[9px] font-medium text-white">Center component in frame</div>
                     </>
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
-                      <div className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-400"><Camera size={19} /></div>
-                      <p className="mt-3 text-xs font-semibold text-slate-600">Camera preview is offline</p>
-                      <p className="mt-1 max-w-[230px] text-[10px] leading-4 text-slate-500">Connect Iriun Webcam or choose another available camera to begin.</p>
+                      <div className="grid h-11 w-11 place-items-center rounded-full border border-line bg-surface text-faint"><Camera size={19} /></div>
+                      <p className="mt-3 text-xs font-semibold text-dim">Camera preview is offline</p>
+                      <p className="mt-1 max-w-[230px] text-[10px] leading-4 text-dim">Connect Iriun Webcam or choose another available camera to begin.</p>
                     </div>
                   )}
                 </div>
-                <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-4 text-slate-500">
-                  <Focus size={13} className="mt-0.5 shrink-0 text-slate-400" />
+                <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-4 text-dim">
+                  <Focus size={13} className="mt-0.5 shrink-0 text-faint" />
                   Keep the full component inside the guide and hold it steady for a clear capture.
                 </p>
               </div>
@@ -418,16 +416,16 @@ export default function NewJob() {
                     <img src={capturedPreview} alt="Latest captured component" />
                   ) : (
                     <div className="flex flex-col items-center px-5 text-center">
-                      <FileImage size={22} className="text-slate-300" />
-                      <p className="mt-2 text-[11px] text-slate-500">Captured image will appear here</p>
+                      <FileImage size={22} className="text-faint" />
+                      <p className="mt-2 text-[11px] text-dim">Captured image will appear here</p>
                     </div>
                   )}
                 </div>
-                <p className="mt-2 text-[10px] leading-4 text-slate-500">Review the image for focus, framing, and surface visibility before comparison.</p>
+                <p className="mt-2 text-[10px] leading-4 text-dim">Review the image for focus, framing, and surface visibility before comparison.</p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
               <div className="flex flex-wrap items-center gap-2">
                 {!cameraActive ? (
                   <button type="button" onClick={startCamera} className="btn-primary">
@@ -462,30 +460,30 @@ export default function NewJob() {
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {cameraActive && cameraDevices.length > 0 && !iriunDetected && (
-                  <span className="flex items-center gap-1 text-[10px] text-amber-700"><AlertCircle size={13} />Iriun not detected</span>
+                  <span className="flex items-center gap-1 text-[10px] text-amber"><AlertCircle size={13} />Iriun not detected</span>
                 )}
-                <label className="inline-flex items-center gap-2 text-[11px] text-slate-600">
+                <label className="inline-flex items-center gap-2 text-[11px] text-dim">
                   <input
                     type="checkbox"
                     checked={autoCapture}
                     onChange={(event) => setAutoCapture(event.target.checked)}
                     disabled={!references?.configured || !cameraActive}
-                    className="accent-[#426f98]"
+                    className="accent-volt"
                   />
                   Auto-capture when steady
                 </label>
               </div>
             </div>
-            {autoCapture && <p className="flex items-center gap-1.5 text-[10px] text-[#426f98]"><LoaderCircle size={13} className="animate-spin" />Waiting for a steady, detailed camera view…</p>}
+            {autoCapture && <p className="flex items-center gap-1.5 text-[10px] text-volt"><LoaderCircle size={13} className="animate-spin" />Waiting for a steady, detailed camera view…</p>}
           </div>
         </section>
 
         <section className="panel overflow-hidden">
-          <div className="flex items-center gap-2.5 border-b border-slate-100 px-4 py-3.5 sm:px-5">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50 text-[#527b9e]"><ScanLine size={16} /></div>
+          <div className="flex items-center gap-2.5 border-b border-line px-4 py-3.5 sm:px-5">
+            <div className="grid h-8 w-8 place-items-center rounded-lg bg-raised text-volt"><ScanLine size={16} /></div>
             <div>
               <h2 className="panel-title">Reference comparison</h2>
-              <p className="mt-0.5 text-[10px] text-slate-500">Registered images for {partNumber || 'selected part'}</p>
+              <p className="mt-0.5 text-[10px] text-dim">Registered images for {partNumber || 'selected part'}</p>
             </div>
           </div>
           <div className="space-y-4 p-4 sm:p-5">
@@ -495,41 +493,41 @@ export default function NewJob() {
                 <ReferenceTile label="2D CAD drawing" description={`Revision ${references.drawing_rev} · top view`} src={referenceUrls.cad} alt="Registered raster CAD drawing" />
               </>
             ) : (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-4">
+              <div className="rounded-lg border border-dashed border-line bg-raised p-4">
                 <div className="flex items-start gap-2.5">
-                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-white text-slate-500 shadow-sm"><FileImage size={15} /></div>
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-surface text-dim shadow-sm"><FileImage size={15} /></div>
                   <div>
-                    <p className="text-xs font-semibold text-slate-700">Part references not configured</p>
-                    <p className="mt-1 text-[10px] leading-4 text-slate-500">Upload the registered physical reference photo and a rasterized CAD view to enable part matching.</p>
+                    <p className="text-xs font-semibold text-ink">Part references not configured</p>
+                    <p className="mt-1 text-[10px] leading-4 text-dim">Upload the registered physical reference photo and a rasterized CAD view to enable part matching.</p>
                   </div>
                 </div>
                 <div className="mt-4 grid gap-3">
-                  <label className="text-[10px] font-semibold text-slate-600">
-                    2D CAD diagram <span className="font-normal text-slate-400">(PNG or JPG)</span>
-                    <input type="file" accept="image/png,image/jpeg" onChange={(event) => setCadUpload(event.target.files?.[0] ?? null)} className="mt-1.5 block w-full rounded-md border border-slate-200 bg-white px-2 py-2" />
+                  <label className="text-[10px] font-semibold text-dim">
+                    2D CAD diagram <span className="font-normal text-faint">(PNG or JPG)</span>
+                    <input type="file" accept="image/png,image/jpeg" onChange={(event) => setCadUpload(event.target.files?.[0] ?? null)} className="mt-1.5 block w-full rounded-md border border-line bg-surface px-2 py-2" />
                   </label>
-                  <label className="text-[10px] font-semibold text-slate-600">
-                    Reference part image <span className="font-normal text-slate-400">(PNG or JPG)</span>
-                    <input type="file" accept="image/png,image/jpeg" onChange={(event) => setReferenceUpload(event.target.files?.[0] ?? null)} className="mt-1.5 block w-full rounded-md border border-slate-200 bg-white px-2 py-2" />
+                  <label className="text-[10px] font-semibold text-dim">
+                    Reference part image <span className="font-normal text-faint">(PNG or JPG)</span>
+                    <input type="file" accept="image/png,image/jpeg" onChange={(event) => setReferenceUpload(event.target.files?.[0] ?? null)} className="mt-1.5 block w-full rounded-md border border-line bg-surface px-2 py-2" />
                   </label>
                   <button type="button" onClick={configureReferences} disabled={loading || !cadUpload || !referenceUpload} className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-50">
                     <Upload size={13} /> Save part references
                   </button>
-                  <p className="text-[9px] leading-4 text-slate-400">Reference uploads require administrator access. Images are associated with the selected part number.</p>
+                  <p className="text-[9px] leading-4 text-faint">Reference uploads require administrator access. Images are associated with the selected part number.</p>
                 </div>
               </div>
             )}
 
             {references?.configured && (
-              <div className="rounded-md border border-slate-100 bg-slate-50/70 p-3">
-                <div className="flex items-start gap-2 text-[10px] leading-4 text-slate-500">
-                  <Info size={13} className="mt-0.5 shrink-0 text-slate-400" />
+              <div className="rounded-md border border-line bg-raised p-3">
+                <div className="flex items-start gap-2 text-[10px] leading-4 text-dim">
+                  <Info size={13} className="mt-0.5 shrink-0 text-faint" />
                   Comparison aligns geometric features and edges. Ensure the live view is clear and shows the same part orientation.
                 </div>
               </div>
             )}
 
-            <div className="border-t border-slate-100 pt-4">
+            <div className="border-t border-line pt-4">
               <button
                 type="button"
                 onClick={verifyCapture}
@@ -587,7 +585,7 @@ export default function NewJob() {
                 <span className="text-[10px] font-medium opacity-75">Similarity score</span>
                 <span className="text-xl font-semibold tabular-nums">{(verification.score * 100).toFixed(1)}%</span>
               </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full rounded-full bg-current transition-all" style={{ width: `${Math.min(100, verification.score * 100)}%` }} />
               </div>
               <p className="mt-1 text-right text-[9px] opacity-70">Threshold {(verification.threshold * 100).toFixed(0)}%</p>
@@ -607,7 +605,7 @@ export default function NewJob() {
             </ul>
             <div className="flex flex-wrap gap-2 border-t border-current/10 pt-3">
               {verification.status === 'Match' && (
-                <button type="button" onClick={startInspection} disabled={loading} className="btn-primary !border-[#39765e] !bg-[#39765e] hover:!bg-[#2e654f] disabled:opacity-50">
+                <button type="button" onClick={startInspection} disabled={loading} className="btn-primary  disabled:opacity-50">
                   {loading ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />}
                   {loading ? 'Starting inspection…' : 'Verify and start inspection'}
                 </button>
@@ -620,7 +618,7 @@ export default function NewJob() {
         )}
       </section>
 
-      {error && <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800"><AlertCircle size={15} className="mt-0.5 shrink-0" />{error}</div>}
+      {error && <div role="alert" className="alert alert-error"><AlertCircle size={15} className="mt-0.5 shrink-0" />{error}</div>}
     </div>
   )
 }
@@ -640,8 +638,8 @@ function ReferenceTile({
     <div>
       <div className="mb-1.5 flex items-start justify-between gap-2">
         <div>
-          <p className="text-[11px] font-semibold text-slate-700">{label}</p>
-          <p className="mt-0.5 text-[9px] text-slate-500">{description}</p>
+          <p className="text-[11px] font-semibold text-ink">{label}</p>
+          <p className="mt-0.5 text-[9px] text-dim">{description}</p>
         </div>
         <span className="status-pill status-green !px-2 !py-1"><Check size={10} />Registered</span>
       </div>
@@ -654,7 +652,7 @@ function ReferenceTile({
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-current/10 bg-white/50 px-3 py-2">
+    <div className="rounded-xl border border-current/20 bg-black/20 px-3 py-2">
       <p className="text-[9px] font-medium opacity-70">{label}</p>
       <p className="mt-1 text-sm font-semibold tabular-nums">{value}</p>
     </div>

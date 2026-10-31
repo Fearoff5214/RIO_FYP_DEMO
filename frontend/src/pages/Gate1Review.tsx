@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { gatesApi } from '../api'
+import { PageHeading } from '../ui'
 
 export default function Gate1Review() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -25,99 +26,66 @@ export default function Gate1Review() {
   const failCount = measurements.length - passCount
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-yellow-300">Gate 1 — Dimensional Review</h1>
-      <p className="text-gray-400 text-sm">Job: {jobId}</p>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeading section="Gate 1" title="Dimensional review" description={`Job ${jobId}`} />
 
-      {/* Summary */}
-      <div className="flex gap-4">
-        <div className="bg-green-900 text-green-200 px-4 py-2 rounded text-sm font-semibold">
-          ✓ {passCount} Within Tolerance
-        </div>
-        <div className={`${failCount > 0 ? 'bg-red-900 text-red-200' : 'bg-gray-800 text-gray-400'} px-4 py-2 rounded text-sm font-semibold`}>
-          ✗ {failCount} Out of Tolerance
-        </div>
+      <div className="flex flex-wrap gap-3">
+        <span className="status-pill status-green">{passCount} within tolerance</span>
+        <span className={`status-pill ${failCount > 0 ? 'status-red' : 'status-neutral'}`}>{failCount} out of tolerance</span>
       </div>
 
-      {/* Measurements table */}
-      <div className="bg-gray-900 rounded-lg p-4">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-gray-500 border-b border-gray-800">
-              <th className="text-left py-2">Feature</th>
-              <th className="text-right py-2">Nominal</th>
-              <th className="text-right py-2">Measured</th>
-              <th className="text-right py-2">Deviation</th>
-              <th className="text-right py-2">Tol ±</th>
-              <th className="text-center py-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {measurements.map((m: any) => (
-              <tr key={m.feature_id} className={`border-b border-gray-800 ${m.within_tolerance ? '' : 'text-red-300'}`}>
-                <td className="py-1.5 font-mono">{m.feature_id}</td>
-                <td className="text-right">{m.nominal.toFixed(2)}</td>
-                <td className="text-right font-semibold">{m.measured.toFixed(2)}</td>
-                <td className="text-right">{m.deviation >= 0 ? '+' : ''}{m.deviation.toFixed(3)}</td>
-                <td className="text-right text-gray-500">+{m.tol_plus?.toFixed(2)} / -{m.tol_minus?.toFixed(2)}</td>
-                <td className="text-center text-lg">{m.within_tolerance ? '✓' : '✗'}</td>
-              </tr>
+      <section className="panel overflow-hidden">
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr><th>Feature</th><th className="num">Nominal</th><th className="num">Measured</th><th className="num">Deviation</th><th className="num">Tol ±</th><th className="ctr">Status</th></tr>
+            </thead>
+            <tbody>
+              {measurements.map((m: any) => (
+                <tr key={m.feature_id} className={m.within_tolerance ? '' : 'row-bad'}>
+                  <td className="mono">{m.feature_id}</td>
+                  <td className="num">{m.nominal.toFixed(2)}</td>
+                  <td className="num font-semibold">{m.measured.toFixed(2)}</td>
+                  <td className="num">{m.deviation >= 0 ? '+' : ''}{m.deviation.toFixed(3)}</td>
+                  <td className="num muted">+{m.tol_plus?.toFixed(2)} / -{m.tol_minus?.toFixed(2)}</td>
+                  <td className="ctr text-lg">{m.within_tolerance ? '✓' : '✗'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head"><h2 className="panel-title">Engineer decision</h2></div>
+        <div className="panel-body space-y-5">
+          <div className="seg" role="group" aria-label="Decision">
+            {(['confirm', 'reject', 'override'] as const).map((d) => (
+              <button key={d} onClick={() => setDecision(d)} data-active={decision === d} data-tone={d === 'reject' ? 'red' : d === 'override' ? 'amber' : undefined}>{d}</button>
             ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Decision form */}
-      <div className="bg-gray-900 rounded-lg p-4 space-y-4">
-        <h2 className="font-semibold text-gray-300">Engineer Decision</h2>
-        <div className="flex gap-3">
-          {(['confirm', 'reject', 'override'] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDecision(d)}
-              className={`px-4 py-2 rounded text-sm font-semibold capitalize ${
-                decision === d
-                  ? d === 'confirm' ? 'bg-green-700 text-white'
-                  : d === 'reject' ? 'bg-red-700 text-white'
-                  : 'bg-yellow-700 text-white'
-                  : 'bg-gray-800 text-gray-400'
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-
-        {(decision === 'override') && (
-          <div>
-            <label className="text-xs text-gray-400 block mb-1">Reason Code (required for override)</label>
-            <input
-              value={reasonCode}
-              onChange={(e) => setReasonCode(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
-              placeholder="e.g. calibration_error, drawing_outdated"
-            />
           </div>
-        )}
 
-        <div>
-          <label className="text-xs text-gray-400 block mb-1">Comments</label>
-          <textarea
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
-            rows={2}
-          />
+          {decision === 'override' && (
+            <div>
+              <label className="field-label" htmlFor="reason">Reason code (required for override)</label>
+              <input id="reason" value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} placeholder="e.g. calibration_error, drawing_outdated" />
+            </div>
+          )}
+
+          <div>
+            <label className="field-label" htmlFor="comments">Comments</label>
+            <textarea id="comments" value={comments} onChange={(e) => setComments(e.target.value)} rows={3} />
+          </div>
+
+          <button
+            onClick={() => submit.mutate({ decision, reason_code: reasonCode || undefined, comments })}
+            disabled={submit.isPending || (decision === 'override' && !reasonCode)}
+            className="btn-primary"
+          >
+            {submit.isPending ? 'Submitting…' : 'Submit decision'}
+          </button>
         </div>
-
-        <button
-          onClick={() => submit.mutate({ decision, reason_code: reasonCode || undefined, comments })}
-          disabled={submit.isPending || (decision === 'override' && !reasonCode)}
-          className="bg-blue-700 hover:bg-blue-600 text-white px-6 py-2 rounded font-semibold disabled:opacity-50"
-        >
-          {submit.isPending ? 'Submitting...' : 'Submit Decision'}
-        </button>
-      </div>
+      </section>
     </div>
   )
 }
