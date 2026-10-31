@@ -1,47 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Clock3,
-  ClipboardCheck,
-  CircleAlert,
-  Plus,
-  ScanLine,
-  ShieldCheck,
-} from 'lucide-react'
-import {
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { ArrowRight, ArrowUpRight, Clock3, ClipboardCheck, CircleAlert, Plus, ScanLine, ShieldCheck } from 'lucide-react'
+import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { dashboardApi, jobsApi, type Job, type KPI } from '../api'
+import { Empty, PageHeading, StatusPill } from '../ui'
 
-const COLORS = ['#507da4', '#b86d67', '#c09350', '#5f927d', '#8882ae']
-
-const STATUS_TONE: Record<string, string> = {
-  CREATED: 'status-neutral',
-  CAPTURING: 'status-blue',
-  DIMENSIONAL: 'status-blue',
-  AWAIT_GATE1: 'status-amber',
-  DEFECT_DETECTION: 'status-violet',
-  AWAIT_LABEL_REVIEW: 'status-amber',
-  RETRIEVAL: 'status-blue',
-  PREDICTION: 'status-violet',
-  AWAIT_GATE2: 'status-amber',
-  REPORTING: 'status-teal',
-  AWAIT_GATE3: 'status-amber',
-  OUTPUT: 'status-green',
-  CLOSED: 'status-green',
-  ON_HOLD: 'status-red',
-  FAILED: 'status-red',
-}
+const COLORS = ['#c6ff3d', '#4fd8ff', '#ff8a3d', '#a78bfa', '#ff4d6a']
+const tooltipStyle = { background: '#161922', border: '1px solid #343a4a', borderRadius: 10, fontSize: 12, color: '#f1f3f8' }
 
 export default function Dashboard() {
   const { data: kpis, isLoading } = useQuery({
@@ -51,7 +16,7 @@ export default function Dashboard() {
   })
   const { data: jobs = [] } = useQuery({
     queryKey: ['jobs'],
-    queryFn: () => jobsApi.list().then((r) => r.data),
+    queryFn: () => jobsApi.list().then((r) => (Array.isArray(r.data) ? r.data : [])),
     refetchInterval: 10_000,
   })
 
@@ -60,11 +25,11 @@ export default function Dashboard() {
       <div className="space-y-7" aria-busy="true" aria-label="Loading quality overview">
         <div className="skeleton h-16 w-full max-w-md" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-[112px]" />)}
+          {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-[130px]" />)}
         </div>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <div className="skeleton h-[290px]" />
-          <div className="skeleton h-[290px]" />
+          <div className="skeleton h-[300px]" />
+          <div className="skeleton h-[300px]" />
         </div>
       </div>
     )
@@ -76,128 +41,108 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-7">
-      <div className="page-heading">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold tracking-[0.12em] text-slate-400">
-            <span>QUALITY OPERATIONS</span>
-            <span className="text-slate-300">/</span>
-            <span className="text-slate-500">OVERVIEW</span>
-          </div>
-          <h1>Inspection overview</h1>
-          <p>Monitor inspection performance, review recent activity, and launch a new part verification.</p>
-        </div>
-        <Link to="/jobs/new" className="btn-primary">
-          <Plus size={15} /> New inspection
-        </Link>
-      </div>
+      <PageHeading
+        section="Overview"
+        title="Inspection overview"
+        description="Monitor inspection performance, review recent activity, and launch a new part verification."
+        action={<Link to="/jobs/new" className="btn-primary"><Plus size={16} /> New inspection</Link>}
+      />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Inspection statistics">
-        <KpiCard label="Total inspections" value={k?.total_jobs ?? 0} icon={ClipboardCheck} detail="All recorded inspection jobs" />
-        <KpiCard label="Pass rate" value={`${((k?.pass_rate ?? 0) * 100).toFixed(1)}%`} icon={ShieldCheck} detail="Share of inspections passed" />
-        <KpiCard label="Defects found" value={k?.failed ?? 0} icon={CircleAlert} detail="Inspections requiring attention" />
-        <KpiCard label="Gate backlog" value={k?.gate_backlog ?? 0} icon={Clock3} detail="Awaiting human review" />
+        <Stat label="Total inspections" value={k?.total_jobs ?? 0} icon={ClipboardCheck} detail="All recorded jobs" color="#c6ff3d" />
+        <Stat label="Pass rate" value={`${((k?.pass_rate ?? 0) * 100).toFixed(1)}%`} icon={ShieldCheck} detail="Share of inspections passed" color="#34e0a1" />
+        <Stat label="Defects found" value={k?.failed ?? 0} icon={CircleAlert} detail="Inspections needing attention" color="#ff4d6a" />
+        <Stat label="Gate backlog" value={k?.gate_backlog ?? 0} icon={Clock3} detail="Awaiting human review" color="#ffc43d" />
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="panel p-5">
-          <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="panel">
+          <div className="panel-head">
             <div>
               <h2 className="panel-title">Defect distribution</h2>
-              <p className="mt-1 text-[11px] text-slate-500">Recorded defect categories across inspections</p>
+              <p className="panel-sub">Recorded defect categories across inspections</p>
             </div>
-            <div className="rounded-lg bg-slate-50 p-2 text-slate-500"><ScanLine size={17} /></div>
+            <div className="icon-tile"><ScanLine size={17} /></div>
           </div>
-          {defectData.length ? (
-            <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(150px,0.8fr)_1fr]">
-              <ResponsiveContainer width="100%" height={210}>
-                <PieChart>
-                  <Pie data={defectData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={78} paddingAngle={3}>
-                    {defectData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} stroke="#fff" />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ border: '1px solid #e4eaf1', borderRadius: 8, fontSize: 11 }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-3">
-                {defectData.map((item, index) => (
-                  <div key={item.name} className="flex items-center justify-between gap-3 text-xs">
-                    <span className="flex min-w-0 items-center gap-2 capitalize text-slate-600">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                      <span className="truncate">{item.name.replace(/_/g, ' ')}</span>
-                    </span>
-                    <span className="font-semibold tabular-nums text-slate-700">{item.value}</span>
-                  </div>
-                ))}
+          <div className="panel-body">
+            {defectData.length ? (
+              <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(150px,0.8fr)_1fr]">
+                <ResponsiveContainer width="100%" height={210}>
+                  <PieChart>
+                    <Pie data={defectData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={55} outerRadius={82} paddingAngle={3} stroke="#0f1117" strokeWidth={3}>
+                      {defectData.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#f1f3f8' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-3">
+                  {defectData.map((item, index) => (
+                    <div key={item.name} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="flex min-w-0 items-center gap-2.5 capitalize text-dim">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                        <span className="truncate">{item.name.replace(/_/g, ' ')}</span>
+                      </span>
+                      <span className="mono font-semibold tabular-nums text-ink">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : (
-            <EmptyChart message="Defect distribution will appear when inspections record defects." />
-          )}
+            ) : (
+              <EmptyChart message="Defect distribution will appear when inspections record defects." />
+            )}
+          </div>
         </div>
 
-        <div className="panel p-5">
-          <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="panel">
+          <div className="panel-head">
             <div>
               <h2 className="panel-title">Workflow status</h2>
-              <p className="mt-1 text-[11px] text-slate-500">Current distribution of inspection jobs</p>
+              <p className="panel-sub">Current distribution of inspection jobs</p>
             </div>
-            <div className="rounded-lg bg-slate-50 p-2 text-slate-500"><Clock3 size={17} /></div>
+            <div className="icon-tile"><Clock3 size={17} /></div>
           </div>
-          {statusData.length ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={statusData} margin={{ top: 4, right: 6, left: -18, bottom: 4 }}>
-                <XAxis dataKey="name" tick={{ fill: '#77899a', fontSize: 9 }} axisLine={{ stroke: '#e5ebf1' }} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: '#91a0ad', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ border: '1px solid #e4eaf1', borderRadius: 8, fontSize: 11 }} />
-                <Bar dataKey="value" fill="#527fa5" radius={[4, 4, 0, 0]} maxBarSize={34} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyChart message="Job status counts will appear as inspections progress." />
-          )}
+          <div className="panel-body">
+            {statusData.length ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={statusData} margin={{ top: 4, right: 6, left: -18, bottom: 4 }}>
+                  <XAxis dataKey="name" tick={{ fill: '#636c7f', fontSize: 10 }} axisLine={{ stroke: '#252a36' }} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fill: '#636c7f', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                  <Bar dataKey="value" fill="#c6ff3d" radius={[6, 6, 0, 0]} maxBarSize={34} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyChart message="Job status counts will appear as inspections progress." />
+            )}
+          </div>
         </div>
       </section>
 
       <section className="panel overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+        <div className="panel-head">
           <div>
             <h2 className="panel-title">Recent inspections</h2>
-            <p className="mt-1 text-[11px] text-slate-500">Latest jobs from the inspection workflow</p>
+            <p className="panel-sub">Latest jobs from the inspection workflow</p>
           </div>
-          <Link to="/jobs" className="inline-flex items-center gap-1 text-xs font-semibold text-[#426f98] hover:text-[#244e74]">
-            View inspection history <ArrowRight size={14} />
-          </Link>
+          <Link to="/jobs" className="link-action">View history <ArrowRight size={14} /></Link>
         </div>
         {jobs.length === 0 ? (
-          <div className="px-5 py-10 text-center">
-            <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-full bg-slate-50 text-slate-400"><ClipboardCheck size={18} /></div>
-            <p className="text-sm font-semibold text-slate-700">No inspections recorded yet</p>
-            <p className="mt-1 text-xs text-slate-500">Start a live inspection to see its progress here.</p>
-          </div>
+          <Empty icon={<ClipboardCheck size={18} />} title="No inspections recorded yet" hint="Start a live inspection to see its progress here." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] text-left text-xs">
-              <thead className="bg-slate-50/80 text-[10px] uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-5 py-3 font-semibold">Job reference</th>
-                  <th className="px-5 py-3 font-semibold">Part number</th>
-                  <th className="px-5 py-3 font-semibold">Workflow status</th>
-                  <th className="px-5 py-3 font-semibold">Created</th>
-                  <th className="px-5 py-3" />
-                </tr>
+          <div className="table-scroll">
+            <table className="data-table min-w-[620px]">
+              <thead>
+                <tr><th>Job</th><th>Part number</th><th>Status</th><th>Created</th><th /></tr>
               </thead>
               <tbody>
                 {(jobs as Job[]).slice(0, 5).map((job) => (
-                  <tr key={job.job_id} className="border-t border-slate-100 hover:bg-slate-50/60">
-                    <td className="px-5 py-3.5 font-mono text-[11px] text-slate-500">{job.job_id.slice(0, 8).toUpperCase()}</td>
-                    <td className="px-5 py-3.5 font-semibold text-slate-700">{job.part_number ?? '—'}</td>
-                    <td className="px-5 py-3.5">
-                      <span className={`status-pill ${STATUS_TONE[job.status] ?? 'status-neutral'}`}>{job.status.replace(/_/g, ' ')}</span>
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-500">{new Date(job.created_at).toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-right">
-                      <Link to={`/jobs/${job.job_id}`} aria-label={`View inspection ${job.job_id}`} className="inline-flex items-center gap-1 font-semibold text-[#426f98] hover:text-[#244e74]">
-                        Details <ArrowUpRight size={13} />
-                      </Link>
+                  <tr key={job.job_id}>
+                    <td className="mono muted">{job.job_id.slice(0, 8).toUpperCase()}</td>
+                    <td className="font-semibold">{job.part_number ?? '—'}</td>
+                    <td><StatusPill status={job.status} /></td>
+                    <td className="muted">{new Date(job.created_at).toLocaleString()}</td>
+                    <td className="num">
+                      <Link to={`/jobs/${job.job_id}`} aria-label={`View inspection ${job.job_id}`} className="link-action">Details <ArrowUpRight size={13} /></Link>
                     </td>
                   </tr>
                 ))}
@@ -210,27 +155,15 @@ export default function Dashboard() {
   )
 }
 
-function KpiCard({
-  label,
-  value,
-  icon: Icon,
-  detail,
-}: {
-  label: string
-  value: string | number
-  icon: typeof ClipboardCheck
-  detail: string
-}) {
+function Stat({ label, value, icon: Icon, detail, color }: { label: string; value: string | number; icon: typeof ClipboardCheck; detail: string; color: string }) {
   return (
-    <div className="panel flex min-h-[112px] items-start justify-between gap-3 p-4">
-      <div>
-        <p className="text-[11px] font-medium text-slate-500">{label}</p>
-        <p className="mt-2 text-[28px] font-bold leading-none tracking-tight text-slate-800 tabular-nums">{value}</p>
-        <p className="mt-2 text-[10px] text-slate-400">{detail}</p>
+    <div className="panel stat" style={{ ['--stat-color' as string]: color }}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="eyebrow">{label}</p>
+        <Icon size={18} strokeWidth={1.8} style={{ color }} />
       </div>
-      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e8f0f7] text-[#315f88]">
-        <Icon size={17} strokeWidth={1.8} />
-      </div>
+      <p className="stat-value">{value}</p>
+      <p className="mt-2 text-xs text-faint">{detail}</p>
     </div>
   )
 }
@@ -238,8 +171,8 @@ function KpiCard({
 function EmptyChart({ message }: { message: string }) {
   return (
     <div className="flex h-[210px] flex-col items-center justify-center text-center">
-      <ScanLine size={20} className="text-slate-300" />
-      <p className="mt-3 max-w-xs text-xs leading-5 text-slate-500">{message}</p>
+      <ScanLine size={22} className="text-faint" />
+      <p className="mt-3 max-w-xs text-xs leading-5 text-faint">{message}</p>
     </div>
   )
 }

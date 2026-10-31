@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { gatesApi } from '../api'
+import { PageHeading } from '../ui'
 
 export default function Gate2Expert() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -25,110 +26,88 @@ export default function Gate2Expert() {
   const top3 = data?.top3 ?? []
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-purple-300">Gate 2 — Expert Root Cause Review</h1>
-        <span className="bg-purple-900 text-purple-200 px-2 py-0.5 rounded text-xs">AI Recommended Top 3 Root Causes</span>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeading
+        section="Gate 2"
+        title="Expert root cause review"
+        description="The AI recommends its top three root causes. Select one, then finalize."
+        action={<span className="status-pill status-violet">AI top 3</span>}
+      />
 
-      {/* Top 3 cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {top3.map((c: any) => (
-          <div
-            key={c.rank}
-            onClick={() => setSelectedRank(c.rank)}
-            className={`bg-gray-900 rounded-lg p-4 cursor-pointer border-2 transition ${
-              selectedRank === c.rank ? 'border-purple-500' : 'border-transparent hover:border-gray-700'
-            }`}
-          >
-            <div className="flex justify-between items-start mb-2">
-              <span className="text-xs text-gray-500">Rank {c.rank}</span>
-              <span className={`text-sm font-bold ${c.confidence_cal >= 0.85 ? 'text-green-400' : c.confidence_cal >= 0.70 ? 'text-yellow-400' : 'text-red-400'}`}>
-                {(c.confidence_cal * 100).toFixed(0)}%
-              </span>
-            </div>
-            <h3 className="font-semibold text-white text-sm mb-1">{c.cause}</h3>
-            <p className="text-xs text-gray-400 mb-2">{c.effect}</p>
-            <div className="text-xs text-gray-500 space-y-0.5">
-              {c.precautions?.slice(0, 3).map((p: string, i: number) => (
-                <div key={i}>• {p}</div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Decision panel */}
-      <div className="bg-gray-900 rounded-lg p-5 space-y-4">
-        <h2 className="font-semibold text-gray-300">Finalized Root Cause</h2>
-
-        <div className="flex gap-3">
-          {(['accept', 'edit', 'reject_all'] as const).map((d) => (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {top3.map((c: any) => {
+          const pct = c.confidence_cal * 100
+          const color = c.confidence_cal >= 0.85 ? '#34e0a1' : c.confidence_cal >= 0.7 ? '#ffc43d' : '#ff4d6a'
+          return (
             <button
-              key={d}
-              onClick={() => setDecision(d)}
-              className={`px-4 py-2 rounded text-sm font-semibold ${
-                decision === d
-                  ? d === 'accept' ? 'bg-green-700 text-white'
-                  : d === 'edit' ? 'bg-yellow-700 text-white'
-                  : 'bg-red-700 text-white'
-                  : 'bg-gray-800 text-gray-400'
-              }`}
+              key={c.rank}
+              type="button"
+              onClick={() => setSelectedRank(c.rank)}
+              aria-pressed={selectedRank === c.rank}
+              className="choice-card text-left"
             >
-              {d === 'reject_all' ? 'Reject All' : d.charAt(0).toUpperCase() + d.slice(1)}
+              <div className="mb-3 flex items-center justify-between">
+                <span className="eyebrow">Rank {c.rank}</span>
+                <span className="mono text-sm font-bold" style={{ color }}>{pct.toFixed(0)}%</span>
+              </div>
+              <div className="meter mb-4" style={{ ['--meter' as string]: color }}><i style={{ width: `${Math.min(100, pct)}%` }} /></div>
+              <h3 className="mb-1 text-[15px] font-semibold text-ink">{c.cause}</h3>
+              <p className="mb-3 text-xs leading-5 text-dim">{c.effect}</p>
+              <ul className="space-y-1 text-xs text-faint">
+                {c.precautions?.slice(0, 3).map((p: string, i: number) => <li key={i}>• {p}</li>)}
+              </ul>
             </button>
-          ))}
-        </div>
-
-        {decision === 'edit' && (
-          <div>
-            <label className="text-xs text-gray-400 block mb-1">Edited Root Cause</label>
-            <input
-              value={editedCause}
-              onChange={(e) => setEditedCause(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
-            />
-          </div>
-        )}
-
-        <div>
-          <label className="text-xs text-gray-400 block mb-1">Corrective Actions (one per line)</label>
-          <textarea
-            value={corrective}
-            onChange={(e) => setCorrective(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
-            rows={3}
-            placeholder="Action 1&#10;Action 2"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-gray-400 block mb-1">Preventive Actions (one per line)</label>
-          <textarea
-            value={preventive}
-            onChange={(e) => setPreventive(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
-            rows={3}
-          />
-        </div>
-
-        <button
-          onClick={() =>
-            submit.mutate({
-              decision,
-              selected_rank: selectedRank,
-              edited_cause: decision === 'edit' ? editedCause : undefined,
-              corrective: corrective.split('\n').filter(Boolean),
-              preventive: preventive.split('\n').filter(Boolean),
-              reviewer_id: 'expert',
-            })
-          }
-          disabled={submit.isPending || (decision === 'edit' && !editedCause)}
-          className="bg-purple-700 hover:bg-purple-600 text-white px-6 py-2 rounded font-bold disabled:opacity-50"
-        >
-          {submit.isPending ? 'Submitting...' : '✓ APPROVED & FINALIZED'}
-        </button>
+          )
+        })}
       </div>
+
+      <section className="panel">
+        <div className="panel-head"><h2 className="panel-title">Finalized root cause</h2></div>
+        <div className="panel-body space-y-5">
+          <div className="seg" role="group" aria-label="Decision">
+            {(['accept', 'edit', 'reject_all'] as const).map((d) => (
+              <button key={d} onClick={() => setDecision(d)} data-active={decision === d} data-tone={d === 'reject_all' ? 'red' : d === 'edit' ? 'amber' : undefined}>
+                {d === 'reject_all' ? 'Reject all' : d}
+              </button>
+            ))}
+          </div>
+
+          {decision === 'edit' && (
+            <div>
+              <label className="field-label" htmlFor="edited">Edited root cause</label>
+              <input id="edited" value={editedCause} onChange={(e) => setEditedCause(e.target.value)} />
+            </div>
+          )}
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="field-label" htmlFor="corr">Corrective actions (one per line)</label>
+              <textarea id="corr" value={corrective} onChange={(e) => setCorrective(e.target.value)} rows={4} placeholder={'Action 1\nAction 2'} />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="prev">Preventive actions (one per line)</label>
+              <textarea id="prev" value={preventive} onChange={(e) => setPreventive(e.target.value)} rows={4} />
+            </div>
+          </div>
+
+          <button
+            onClick={() =>
+              submit.mutate({
+                decision,
+                selected_rank: selectedRank,
+                edited_cause: decision === 'edit' ? editedCause : undefined,
+                corrective: corrective.split('\n').filter(Boolean),
+                preventive: preventive.split('\n').filter(Boolean),
+                reviewer_id: 'expert',
+              })
+            }
+            disabled={submit.isPending || (decision === 'edit' && !editedCause)}
+            className="btn-primary"
+          >
+            {submit.isPending ? 'Submitting…' : 'Approve & finalize'}
+          </button>
+        </div>
+      </section>
     </div>
   )
 }

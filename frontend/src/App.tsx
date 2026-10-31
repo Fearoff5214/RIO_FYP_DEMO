@@ -111,11 +111,12 @@ export default function App() {
       <div className="app-main">
         <header className="app-topbar">
           <div className="topbar-context">
-            <span className="topbar-eyebrow">MANUFACTURING QUALITY</span>
+            <span className="topbar-eyebrow">NOVALISEO // QUALITY</span>
             <span className="topbar-divider">/</span>
             <span className="topbar-title">{title}</span>
           </div>
           <div className="topbar-workspace">
+            <span className="live-dot" />
             <Activity size={15} />
             <span>Inspection workspace</span>
           </div>
