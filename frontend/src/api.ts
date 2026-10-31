@@ -70,6 +70,8 @@ export const jobsApi = {
     }),
   list: () => api.get<Job[]>('/jobs'),
   get: (id: string) => api.get<any>(`/jobs/${id}`),
+  captureImage: (jobId: string, imageId: string) =>
+    api.get(`/jobs/${jobId}/images/${imageId}`, { responseType: 'blob' }),
 }
 
 export const partsApi = {

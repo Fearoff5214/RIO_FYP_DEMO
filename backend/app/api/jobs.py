@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -223,6 +223,33 @@ async def get_job(
         ],
         "workflow_status": thread_run.get("status"),
     }
+
+
+@router.get("/{job_id}/images/{image_id}")
+async def get_job_image(
+    job_id: str,
+    image_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Serve a stored capture only when it belongs to the requested job."""
+    from sqlalchemy import select
+
+    from app.core.storage import resolve_capture_path
+    from app.db.models import ImageAsset
+
+    result = await db.execute(
+        select(ImageAsset).where(ImageAsset.job_id == job_id, ImageAsset.image_id == image_id)
+    )
+    asset = result.scalar_one_or_none()
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Inspection image not found")
+
+    image_path = resolve_capture_path(asset.uri)
+    if image_path is None:
+        raise HTTPException(status_code=404, detail="Inspection image is no longer available")
+
+    return FileResponse(image_path, content_disposition_type="inline")
 
 
 @router.get("/{job_id}/events")

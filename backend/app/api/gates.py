@@ -40,6 +40,28 @@ async def get_gate1(
     )
     overlays = overlay_result.scalars().all()
 
+    capture_result = await db.execute(
+        select(ImageAsset).where(
+            ImageAsset.job_id == job_id,
+            ImageAsset.kind.in_(("raw", "processed")),
+        )
+    )
+    capture_assets = capture_result.scalars().all()
+    capture = next((asset for asset in capture_assets if asset.kind == "raw"), None)
+    if capture is None and capture_assets:
+        capture = capture_assets[0]
+
+    capture_path = None
+    geometry = None
+    if capture:
+        from app.core.storage import resolve_capture_path
+
+        capture_path = resolve_capture_path(capture.uri)
+    if capture_path:
+        from app.cv.features import analyze_image_geometry
+
+        geometry = analyze_image_geometry(str(capture_path))
+
     return {
         "job_id": job_id,
         "gate": "GATE1",
@@ -56,6 +78,11 @@ async def get_gate1(
             }
             for d in dims
         ],
+        "captured_image_id": capture.image_id if capture_path and capture else None,
+        "geometry_status": geometry.get("status") if geometry else "unavailable",
+        "geometry_dimensions_px": geometry.get("dimensions_px") if geometry else None,
+        "geometry_reason": geometry.get("reason") if geometry else "No supported captured image is stored for this job.",
+        "geometry_annotations": geometry.get("annotations", []) if geometry else [],
         "overlay_uri": overlays[0].uri if overlays else None,
         "instructions": "Review dimensional deviations. Confirm, reject for re-measurement, or override with reason.",
     }
