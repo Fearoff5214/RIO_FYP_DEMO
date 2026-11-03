@@ -1,0 +1,393 @@
+{
+ "crack frame": {
+  "rca_id": "af66175ec51342aba4bd1122cf5fea4a",
+  "model": "gemini:gemini-3.1-flash-lite",
+  "ai_used": true,
+  "flags": [
+   "low_evidence"
+  ],
+  "output_valid": true,
+  "root_cause": {
+   "cause": "Material Hardness Variation",
+   "effect": "Cracking at bend radius",
+   "rationale": "The detected 9.0 mm crack at the bend radius is directly linked to material hardness variations in SPCC steel, which increases susceptibility to cracking during forming operations as documented in [02cf0928-6739-4f7e-ae1b-f6740283f00f].",
+   "corrective_actions": [
+    "Verify material certificates against specification for yield strength, tensile strength, and hardness",
+    "Conduct incoming material hardness testing"
+   ],
+   "preventive_actions": [
+    "Implement stricter incoming material quality inspection protocols",
+    "Audit material supplier quality control processes"
+   ],
+   "precautions": [
+    "Ensure batch traceability for all SPCC steel lots"
+   ],
+   "verification": null,
+   "citations": [
+    "02cf0928-6739-4f7e-ae1b-f6740283f00f"
+   ],
+   "confidence": 0.8918,
+   "model_version": "gemini:gemini-3.1-flash-lite",
+   "edited": false
+  },
+  "top3": [
+   {
+    "cause": "Material Hardness Variation",
+    "rationale": "The detected 9.0 mm crack at the bend radius is directly linked to material hardness variations in SPCC steel, which increases susceptibility to cracking during forming operations as documented in [02cf0928-6739-4f7e-ae1b-f6740283f00f].",
+    "effect": "Cracking at bend radius",
+    "verification": null,
+    "precautions": [
+     "Ensure batch traceability for all SPCC steel lots"
+    ],
+    "corrective_actions": [
+     "Verify material certificates against specification for yield strength, tensile strength, and hardness",
+     "Conduct incoming material hardness testing"
+    ],
+    "preventive_actions": [
+     "Implement stricter incoming material quality inspection protocols",
+     "Audit material supplier quality control processes"
+    ],
+    "citations": [
+     "02cf0928-6739-4f7e-ae1b-f6740283f00f"
+    ],
+    "model_version": "gemini:gemini-3.1-flash-lite",
+    "confidence_raw": 0.8918,
+    "rank": 1,
+    "confidence_cal": 0.8918,
+    "calibration_method": "identity_uncalibrated"
+   },
+   {
+    "cause": "Insufficient Evidence for Alternative Causes",
+    "rationale": "The provided evidence [02cf0928-6739-4f7e-ae1b-f6740283f00f] focuses exclusively on material inconsistency. No other evidence regarding tooling, lubrication, or machine parameters was provided to support additional root causes.",
+    "effect": "Crack",
+    "verification": null,
+    "precautions": [
+     "Do not assume material is the sole cause without further investigation of process variables"
+    ],
+    "corrective_actions": [
+     "Review process parameters if material quality is confirmed to be within specification"
+    ],
+    "preventive_actions": [
+     "Expand root cause analysis to include tooling and process parameters"
+    ],
+    "citations": [
+     "02cf0928-6739-4f7e-ae1b-f6740283f00f"
+    ],
+    "model_version": "gemini:gemini-3.1-flash-lite",
+    "confidence_raw": 0.8618,
+    "rank": 2,
+    "confidence_cal": 0.8618,
+    "calibration_method": "identity_uncalibrated"
+   },
+   {
+    "cause": "Work Hardening Inconsistency",
+    "rationale": "The evidence [02cf0928-6739-4f7e-ae1b-f6740283f00f] identifies work hardening inconsistency as a contributor to surface defects and cracking in SPCC steel, which aligns with the critical crack detected.",
+    "effect": "Cracking at bend radius",
+    "verification": null,
+    "precautions": [
+     "Monitor bend radius integrity during production runs"
+    ],
+    "corrective_actions": [
+     "Quarantine affected material lots",
+     "Perform metallurgical analysis on cracked samples"
+    ],
+    "preventive_actions": [
+     "Review material storage and handling to prevent premature work hardening",
+     "Establish tighter control on incoming material mechanical properties"
+    ],
+    "citations": [
+     "02cf0928-6739-4f7e-ae1b-f6740283f00f"
+    ],
+    "model_version": "gemini:gemini-3.1-flash-lite",
+    "confidence_raw": 0.8318,
+    "rank": 3,
+    "confidence_cal": 0.8318,
+    "calibration_method": "identity_uncalibrated"
+   }
+  ],
+  "evidence": [
+   {
+    "doc_id": "66844fbc-5330-472d-960d-a9ea2b693464",
+    "chunk_id": "02cf0928-6739-4f7e-ae1b-f6740283f00f",
+    "score": 0.9835578860839042,
+    "uri": "kb://chunk/02cf0928-6739-4f7e-ae1b-f6740283f00f",
+    "text_excerpt": "Material Inconsistency / Hardness Variation Root Cause Analysis Defect Types: crack, deformation, dimensional variation Material: SPCC steel, cold-rolled sheet metal Root Cause: Hardness variation in incoming material lot causes unpredictable springback behavior and susceptibility to cracking under forming operations. Effect: Cracking at bend radius, dimensional inaccuracy due to variable springback, surface defects from work hardening inconsistency. Corrective Actions: 1. Verify material certificates against specification (yield strength, tensile strength, hardness) 2. Conduct incoming materi"
+   }
+  ],
+  "documents": {
+   "docx": "/api/v1/rca/af66175ec51342aba4bd1122cf5fea4a/download?fmt=docx",
+   "pdf": "/api/v1/rca/af66175ec51342aba4bd1122cf5fea4a/download?fmt=pdf",
+   "md": "/api/v1/rca/af66175ec51342aba4bd1122cf5fea4a/download?fmt=md"
+  }
+ },
+ "size mismatch frame": {
+  "rca_id": "612659835ce4400eaa2fba11ad1399ae",
+  "model": "gemini:gemini-3.1-flash-lite",
+  "ai_used": true,
+  "flags": [],
+  "output_valid": true,
+  "root_cause": {
+   "cause": "Improper Bending Force",
+   "effect": "Dimensional Inaccuracy",
+   "rationale": "The length deviation (118.44mm vs 120.00mm) suggests that excessive force or incorrect settings during the bending process may have caused material deformation beyond the intended dimensions [586f086d-0deb-40c2-a71d-f840aaa55a60].",
+   "corrective_actions": [
+    "Recalibrate press brake force settings to material specification",
+    "Verify tonnage calculator against actual material hardness test results"
+   ],
+   "preventive_actions": [
+    "Implement first-article inspection",
+    "Standardize tonnage settings for SPCC steel material lots"
+   ],
+   "precautions": [
+    "Ensure material thickness is verified before bending"
+   ],
+   "verification": "Perform a first-article inspection to confirm length is within 120.00 +/- 0.10mm",
+   "citations": [
+    "586f086d-0deb-40c2-a71d-f840aaa55a60"
+   ],
+   "confidence": 0.7528,
+   "model_version": "gemini:gemini-3.1-flash-lite",
+   "edited": false
+  },
+  "top3": [
+   {
+    "cause": "Improper Bending Force",
+    "rationale": "The length deviation (118.44mm vs 120.00mm) suggests that excessive force or incorrect settings during the bending process may have caused material deformation beyond the intended dimensions [586f086d-0deb-40c2-a71d-f840aaa55a60].",
+    "effect": "Dimensional Inaccuracy",
+    "verification": "Perform a first-article inspection to confirm length is within 120.00 +/- 0.10mm",
+    "precautions": [
+     "Ensure material thickness is verified before bending"
+    ],
+    "corrective_actions": [
+     "Recalibrate press brake force settings to material specification",
+     "Verify tonnage calculator against actual material hardness test results"
+    ],
+    "preventive_actions": [
+     "Implement first-article inspection",
+     "Standardize tonnage settings for SPCC steel material lots"
+    ],
+    "citations": [
+     "586f086d-0deb-40c2-a71d-f840aaa55a60"
+    ],
+    "model_version": "gemini:gemini-3.1-flash-lite",
+    "confidence_raw": 0.7528,
+    "rank": 1,
+    "confidence_cal": 0.7528,
+    "calibration_method": "identity_uncalibrated"
+   },
+   {
+    "cause": "Springback",
+    "rationale": "Elastic recovery of the material after bending can lead to dimensional inaccuracies in linear dimensions related to the bend, which may contribute to the observed length mismatch [6872e1ff-9d0f-41f8-9cd9-c783d66c1b46].",
+    "effect": "Dimensional Inaccuracy",
+    "verification": "Measure bent angle and related length after program adjustment",
+    "precautions": [
+     "Monitor material lot consistency"
+    ],
+    "corrective_actions": [
+     "Apply overbend compensation to tooling angle",
+     "Adjust bending program to compensate for measured springback"
+    ],
+    "preventive_actions": [
+     "Test material springback coefficient for each lot",
+     "Implement springback compensation protocols"
+    ],
+    "citations": [
+     "6872e1ff-9d0f-41f8-9cd9-c783d66c1b46"
+    ],
+    "model_version": "gemini:gemini-3.1-flash-lite",
+    "confidence_raw": 0.3788,
+    "rank": 2,
+    "confidence_cal": 0.3788,
+    "calibration_method": "identity_uncalibrated"
+   },
+   {
+    "cause": "Tool Wear / Die Damage",
+    "rationale": "The significant deviation in hole diameter (12.73mm vs 12.00mm) and hole position (1.91mm off) indicates a potential shift or degradation in the punch/die geometry, which is a known effect of tool wear [587aa665-c6f1-48df-8783-09d65ff4f82a].",
+    "effect": "Dimensional Inaccuracy",
+    "verification": "Measure hole diameter and position on the next 5 parts after tool maintenance",
+    "precautions": [
+     "Check for edge burrs during inspection"
+    ],
+    "corrective_actions": [
+     "Inspect tooling under magnification for wear, chipping, or damage",
+     "Regrind worn punch/die to restore geometry within tolerance"
+    ],
+    "preventive_actions": [
+     "Establish a scheduled tool maintenance and inspection program",
+     "Monitor hole dimensions periodically during production runs"
+    ],
+    "citations": [
+     "587aa665-c6f1-48df-8783-09d65ff4f82a"
+    ],
+    "model_version": "gemini:gemini-3.1-flash-lite",
+    "confidence_raw": 0.3539,
+    "rank": 3,
+    "confidence_cal": 0.3539,
+    "calibration_method": "identity_uncalibrated"
+   }
+  ],
+  "evidence": [
+   {
+    "doc_id": "679d9bf8-c74c-4cdb-a53a-5e15cdfeb2d7",
+    "chunk_id": "586f086d-0deb-40c2-a71d-f840aaa55a60",
+    "score": 0.868443015100415,
+    "uri": "kb://chunk/586f086d-0deb-40c2-a71d-f840aaa55a60",
+    "text_excerpt": "Improper Bending Force / Over Bending Root Cause Analysis Defect Types: deformation, dimensional inaccuracy Process: sheet metal bending, press brake operations Root Cause: Improper bending force settings or over-bending beyond the material's elastic limit. Effect: Deformation of the part, dimensional inaccuracy in bent features, springback issues causing part to not meet dimensional tolerances. Corrective Actions: 1. Recalibrate press brake force settings to material specification 2. Verify tonnage calculator against actual material hardness test results 3. Implement first-article inspection "
+   },
+   {
+    "doc_id": "34a34a31-8060-4c52-9608-e798874c4fd4",
+    "chunk_id": "6872e1ff-9d0f-41f8-9cd9-c783d66c1b46",
+    "score": 0.18040051130151186,
+    "uri": "kb://chunk/6872e1ff-9d0f-41f8-9cd9-c783d66c1b46",
+    "text_excerpt": "Springback Root Cause Analysis Defect Types: deformation, dimensional inaccuracy Process: sheet metal bending Root Cause: Elastic recovery of sheet metal after forming (springback) causes the bent angle to open up beyond the intended angle. Effect: Dimensional inaccuracy in bent angles, parts out of tolerance on angular dimensions and related linear dimensions. Corrective Actions: 1. Apply overbend compensation to tooling angle 2. Test material springback coefficient for each lot 3. Adjust bending program to compensate for measured springback Preventive Actions: 1. Implement springback compens"
+   },
+   {
+    "doc_id": "66863874-cbef-4441-ac0c-7d26732614a7",
+    "chunk_id": "587aa665-c6f1-48df-8783-09d65ff4f82a",
+    "score": 0.010507329613271199,
+    "uri": "kb://chunk/587aa665-c6f1-48df-8783-09d65ff4f82a",
+    "text_excerpt": "Tool Wear / Die Damage Root Cause Analysis Defect Types: scratch, dent, edge burr, dimensional shift Process: bending, stamping, forming Root Cause: Progressive wear of punch/die tooling causes dimensional drift, surface scratches, edge burrs and dents on formed parts. Effect: Surface defects (scratches from worn tooling edges), dents from damaged die surfaces, edge burrs from worn cutting edges, gradual dimensional shift as tooling geometry changes. Corrective Actions: 1. Inspect tooling under magnification for wear, chipping, or damage 2. Regrind worn punch/die to restore geometry within tol"
+   }
+  ],
+  "documents": {
+   "docx": "/api/v1/rca/612659835ce4400eaa2fba11ad1399ae/download?fmt=docx",
+   "pdf": "/api/v1/rca/612659835ce4400eaa2fba11ad1399ae/download?fmt=pdf",
+   "md": "/api/v1/rca/612659835ce4400eaa2fba11ad1399ae/download?fmt=md"
+  }
+ },
+ "surface defects frame": {
+  "rca_id": "ba7383902c6c4806b0ec1ed47141bc48",
+  "model": "gemini:gemini-3.1-flash-lite",
+  "ai_used": true,
+  "flags": [],
+  "output_valid": true,
+  "root_cause": {
+   "cause": "Tool Wear / Die Damage",
+   "effect": "Deformation, Surface Defects",
+   "rationale": "The presence of a 46.1 mm scratch and a 14 mm dent directly correlates with surface defects caused by damaged or worn die surfaces as described in [587aa665-c6f1-48df-8783-09d65ff4f82a].",
+   "corrective_actions": [
+    "Inspect tooling under magnification for wear, chipping, or damage",
+    "Regrind worn punch/die to restore geometry within tolerance"
+   ],
+   "preventive_actions": [
+    "Establish a periodic tooling inspection schedule",
+    "Monitor surface finish quality during production runs"
+   ],
+   "precautions": [
+    "Ensure die surfaces are free of debris before operation"
+   ],
+   "verification": "Visual inspection of subsequent parts for absence of scratches and dents",
+   "citations": [
+    "587aa665-c6f1-48df-8783-09d65ff4f82a"
+   ],
+   "confidence": 0.7559,
+   "model_version": "gemini:gemini-3.1-flash-lite",
+   "edited": false
+  },
+  "top3": [
+   {
+    "cause": "Tool Wear / Die Damage",
+    "rationale": "The presence of a 46.1 mm scratch and a 14 mm dent directly correlates with surface defects caused by damaged or worn die surfaces as described in [587aa665-c6f1-48df-8783-09d65ff4f82a].",
+    "effect": "Deformation, Surface Defects",
+    "verification": "Visual inspection of subsequent parts for absence of scratches and dents",
+    "precautions": [
+     "Ensure die surfaces are free of debris before operation"
+    ],
+    "corrective_actions": [
+     "Inspect tooling under magnification for wear, chipping, or damage",
+     "Regrind worn punch/die to restore geometry within tolerance"
+    ],
+    "preventive_actions": [
+     "Establish a periodic tooling inspection schedule",
+     "Monitor surface finish quality during production runs"
+    ],
+    "citations": [
+     "587aa665-c6f1-48df-8783-09d65ff4f82a"
+    ],
+    "model_version": "gemini:gemini-3.1-flash-lite",
+    "confidence_raw": 0.7559,
+    "rank": 1,
+    "confidence_cal": 0.7559,
+    "calibration_method": "identity_uncalibrated"
+   },
+   {
+    "cause": "Improper Bending Force",
+    "rationale": "The detected bend angle of 93.1 degrees (exceeding the 90.5 degree limit) indicates an issue with bending force settings or over-bending, which is a known cause for deformation in sheet metal bending [586f086d-0deb-40c2-a71d-f840aaa55a60].",
+    "effect": "Deformation",
+    "verification": "Measure bend angle on first-article parts to ensure it falls within 90 +/- 0.5 degrees",
+    "precautions": [
+     "Verify material thickness and hardness before bending"
+    ],
+    "corrective_actions": [
+     "Recalibrate press brake force settings to material specification",
+     "Verify tonnage calculator against actual material hardness test results"
+    ],
+    "preventive_actions": [
+     "Implement first-article inspection",
+     "Standardize tonnage settings for SPCC material lots"
+    ],
+    "citations": [
+     "586f086d-0deb-40c2-a71d-f840aaa55a60"
+    ],
+    "model_version": "gemini:gemini-3.1-flash-lite",
+    "confidence_raw": 0.745,
+    "rank": 2,
+    "confidence_cal": 0.745,
+    "calibration_method": "identity_uncalibrated"
+   },
+   {
+    "cause": "Springback",
+    "rationale": "The deviation in the bend angle (93.1 degrees vs 90 degrees) is a classic indicator of elastic recovery (springback) occurring after the bending process, as outlined in [6872e1ff-9d0f-41f8-9cd9-c783d66c1b46].",
+    "effect": "Deformation, Dimensional Inaccuracy",
+    "verification": "Verify final bent angle meets tolerance after program adjustment",
+    "precautions": [
+     "Account for material batch variations in springback behavior"
+    ],
+    "corrective_actions": [
+     "Apply overbend compensation to tooling angle",
+     "Adjust bending program to compensate for measured springback"
+    ],
+    "preventive_actions": [
+     "Implement springback compensation protocols",
+     "Test material springback coefficient for each lot"
+    ],
+    "citations": [
+     "6872e1ff-9d0f-41f8-9cd9-c783d66c1b46"
+    ],
+    "model_version": "gemini:gemini-3.1-flash-lite",
+    "confidence_raw": 0.5272,
+    "rank": 3,
+    "confidence_cal": 0.5272,
+    "calibration_method": "identity_uncalibrated"
+   }
+  ],
+  "evidence": [
+   {
+    "doc_id": "679d9bf8-c74c-4cdb-a53a-5e15cdfeb2d7",
+    "chunk_id": "586f086d-0deb-40c2-a71d-f840aaa55a60",
+    "score": 0.90479166483543,
+    "uri": "kb://chunk/586f086d-0deb-40c2-a71d-f840aaa55a60",
+    "text_excerpt": "Improper Bending Force / Over Bending Root Cause Analysis Defect Types: deformation, dimensional inaccuracy Process: sheet metal bending, press brake operations Root Cause: Improper bending force settings or over-bending beyond the material's elastic limit. Effect: Deformation of the part, dimensional inaccuracy in bent features, springback issues causing part to not meet dimensional tolerances. Corrective Actions: 1. Recalibrate press brake force settings to material specification 2. Verify tonnage calculator against actual material hardness test results 3. Implement first-article inspection "
+   },
+   {
+    "doc_id": "66863874-cbef-4441-ac0c-7d26732614a7",
+    "chunk_id": "587aa665-c6f1-48df-8783-09d65ff4f82a",
+    "score": 0.8664700434423105,
+    "uri": "kb://chunk/587aa665-c6f1-48df-8783-09d65ff4f82a",
+    "text_excerpt": "Tool Wear / Die Damage Root Cause Analysis Defect Types: scratch, dent, edge burr, dimensional shift Process: bending, stamping, forming Root Cause: Progressive wear of punch/die tooling causes dimensional drift, surface scratches, edge burrs and dents on formed parts. Effect: Surface defects (scratches from worn tooling edges), dents from damaged die surfaces, edge burrs from worn cutting edges, gradual dimensional shift as tooling geometry changes. Corrective Actions: 1. Inspect tooling under magnification for wear, chipping, or damage 2. Regrind worn punch/die to restore geometry within tol"
+   },
+   {
+    "doc_id": "34a34a31-8060-4c52-9608-e798874c4fd4",
+    "chunk_id": "6872e1ff-9d0f-41f8-9cd9-c783d66c1b46",
+    "score": 0.5291717003204477,
+    "uri": "kb://chunk/6872e1ff-9d0f-41f8-9cd9-c783d66c1b46",
+    "text_excerpt": "Springback Root Cause Analysis Defect Types: deformation, dimensional inaccuracy Process: sheet metal bending Root Cause: Elastic recovery of sheet metal after forming (springback) causes the bent angle to open up beyond the intended angle. Effect: Dimensional inaccuracy in bent angles, parts out of tolerance on angular dimensions and related linear dimensions. Corrective Actions: 1. Apply overbend compensation to tooling angle 2. Test material springback coefficient for each lot 3. Adjust bending program to compensate for measured springback Preventive Actions: 1. Implement springback compens"
+   }
+  ],
+  "documents": {
+   "docx": "/api/v1/rca/ba7383902c6c4806b0ec1ed47141bc48/download?fmt=docx",
+   "pdf": "/api/v1/rca/ba7383902c6c4806b0ec1ed47141bc48/download?fmt=pdf",
+   "md": "/api/v1/rca/ba7383902c6c4806b0ec1ed47141bc48/download?fmt=md"
+  }
+ }
+}

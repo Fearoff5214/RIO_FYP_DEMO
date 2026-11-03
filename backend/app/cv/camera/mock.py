@@ -8,7 +8,7 @@ from pathlib import Path
 class MockCamera:
     """Deterministic mock camera for CI and development."""
 
-    SAMPLES_DIR = Path(__file__).resolve().parents[5] / "samples"
+    SAMPLES_DIR = Path(__file__).resolve().parents[4] / "samples"
 
     async def capture(self, recipe: dict) -> list[dict]:
         """Return a list of image dicts using sample files if available."""

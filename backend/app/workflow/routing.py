@@ -85,15 +85,10 @@ def route_evidence(state: InspectionState) -> str:
     """After rerank: evidence sufficient or L4 retry."""
     if state.get("evidence_sufficient"):
         return "assemble_evidence"
-    count = _inc(state, "L4")
-    if count < _get_max("L4"):
-        return "apply_filters"  # relax filters and retry
-    # exhausted: flag and continue
-    flags = list(state.get("flags", []) or [])
-    if "low_evidence" not in flags:
-        flags.append("low_evidence")
-    state["flags"] = flags  # type: ignore[typeddict-item]
-    return "assemble_evidence"
+    done = (state.get("loops", {}) or {}).get("L4", 0)
+    if done + 1 < _get_max("L4"):
+        return "retry_evidence"      # counted in a node, then filters are relaxed and retrieval retried
+    return "flag_low_evidence"       # exhausted: flag and continue
 
 
 # ── Stage 5 routing ────────────────────────────────────────────────────────────
@@ -102,15 +97,10 @@ def route_output_valid(state: InspectionState) -> str:
     """After format_top3 / calibrate: valid or L5 regenerate."""
     if state.get("output_valid"):
         return "save_ranked"
-    count = _inc(state, "L5")
-    if count < _get_max("L5"):
-        return "llm_reason"
-    # exhausted: send flagged low_confidence
-    flags = list(state.get("flags", []) or [])
-    if "low_confidence" not in flags:
-        flags.append("low_confidence")
-    state["flags"] = flags  # type: ignore[typeddict-item]
-    return "save_ranked"
+    done = (state.get("loops", {}) or {}).get("L5", 0)
+    if done + 1 < _get_max("L5"):
+        return "retry_llm"           # counted in a node, then the LLM answer is regenerated
+    return "flag_low_confidence"     # exhausted: keep the output, flagged
 
 
 # ── Stage 6 routing ────────────────────────────────────────────────────────────

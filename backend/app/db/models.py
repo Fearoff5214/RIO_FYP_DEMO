@@ -165,6 +165,10 @@ class RootCausePrediction(Base):
     confidence_cal: Mapped[float] = mapped_column(Float, nullable=False)
     evidence: Mapped[list] = mapped_column(JSON, default=list)
     model_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)            # the reason
+    corrective_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)  # the solution
+    preventive_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    verification: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 # ── Final RCA ──────────────────────────────────────────────────────────────────
@@ -181,6 +185,10 @@ class FinalRCA(Base):
     edited: Mapped[bool] = mapped_column(Boolean, default=False)
     reviewer_id: Mapped[str | None] = mapped_column(String, nullable=True)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    citations: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    model_version: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 # ── Reports ────────────────────────────────────────────────────────────────────
@@ -198,6 +206,9 @@ class Report(Base):
     approved_by: Mapped[str | None] = mapped_column(String, nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     signature_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    rca_docx_uri: Mapped[str | None] = mapped_column(String, nullable=True)   # root cause analysis document
+    rca_pdf_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    rca_md_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

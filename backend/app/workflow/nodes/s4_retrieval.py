@@ -98,7 +98,20 @@ async def hybrid_retrieve(state: InspectionState, *, db=None) -> dict:
     query = state.get("query", {}) or {}
     logger.info('"node":"hybrid_retrieve","query_len":%d', len(query.get("text", "")))
 
-    retrieved = await _retrieve(query, db=db)
+    retrieved: list = []
+    if db is not None:
+        retrieved = await _retrieve(query, db=db)
+    else:
+        # the workflow does not hand nodes a session: read the knowledge base through our own
+        try:
+            from app.db.session import _get_session_factory
+
+            async with _get_session_factory()() as session:
+                retrieved = await _retrieve(query, db=session)
+        except Exception as exc:                                  # noqa: BLE001
+            logger.warning('"node":"hybrid_retrieve","kb_unavailable":"%s"', type(exc).__name__)
+    if not retrieved:                                             # empty or unreachable KB: built-in seed evidence
+        retrieved = await _retrieve(query, db=None)
     return {"retrieved": retrieved}
 
 
@@ -138,7 +151,7 @@ async def assemble_evidence(state: InspectionState) -> dict:
             "chunk_id": r.get("chunk_id", ""),
             "score": r.get("score", 0.0),
             "uri": r.get("uri", ""),
-            "text_excerpt": r.get("text", "")[:200],
+            "text_excerpt": r.get("text", "")[:600],
         }
         for r in reranked
     ]

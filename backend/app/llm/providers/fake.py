@@ -21,6 +21,15 @@ MOCK_RESPONSE = {
                 "Use proper tooling and punch/die sets",
                 "Regular machine calibration and force verification",
             ],
+            "corrective_actions": [
+                "Re-set the press-brake bending force and angle to the material specification",
+                "Re-inspect the affected lot for deformation and dimensional deviation",
+            ],
+            "preventive_actions": [
+                "Add bending-force verification to the machine calibration schedule",
+                "Control bending parameters per material batch",
+            ],
+            "verification": "Re-inspect the next 30 parts; no deformation and all dimensions within tolerance",
             "citations": ["seed-001", "seed-004"],
         },
         {
@@ -35,6 +44,15 @@ MOCK_RESPONSE = {
                 "Conduct incoming material hardness inspection",
                 "Perform supplier quality audit",
             ],
+            "corrective_actions": [
+                "Quarantine the affected material batch and check its certificate",
+                "Run a hardness test on retained samples",
+            ],
+            "preventive_actions": [
+                "Introduce incoming material hardness inspection",
+                "Audit the supplier and tighten the material specification",
+            ],
+            "verification": "Hardness within specification on the next three batches",
             "citations": ["seed-002"],
         },
         {
@@ -49,6 +67,15 @@ MOCK_RESPONSE = {
                 "Perform preventive maintenance per cycle count",
                 "Regrind or replace worn dies proactively",
             ],
+            "corrective_actions": [
+                "Inspect and regrind or replace the worn die or punch",
+                "Remove scratched parts from the lot",
+            ],
+            "preventive_actions": [
+                "Set a preventive-maintenance interval based on cycle count",
+                "Add a tool-condition check to the start-of-shift routine",
+            ],
+            "verification": "No new scratches or dents over the next production run",
             "citations": ["seed-003"],
         },
     ]
@@ -64,5 +91,5 @@ class FakeLLMProvider:
         evidence: dict,
         regenerate: bool = False,
     ) -> list[dict]:
-        """Return the mock candidates list."""
-        return MOCK_RESPONSE["candidates"]
+        """Return the mock candidates list, tagged so offline output is never mistaken for AI output."""
+        return [{**c, "model_version": "fake-offline"} for c in MOCK_RESPONSE["candidates"]]

@@ -71,17 +71,20 @@ async def create_job(state: InspectionState, *, db=None) -> dict:
         from app.db.audit import write_audit
         from app.db.models import InspectionJob
 
-        job = InspectionJob(
-            job_id=job_id,
-            part_number=state.get("part_number"),
-            status="CREATED",
-            current_stage=1,
-            thread_id=thread_id,
-            loop_counters=state.get("loops", {}),
-            flags=state.get("flags", []),
-        )
-        db.add(job)
-        await db.commit()
+        from sqlalchemy import select
+
+        existing = (await db.execute(select(InspectionJob).where(InspectionJob.job_id == job_id))).scalar_one_or_none()
+        if existing is None:                       # started from a script; the jobs API inserts its own row first
+            db.add(InspectionJob(
+                job_id=job_id,
+                part_number=state.get("part_number"),
+                status="CREATED",
+                current_stage=1,
+                thread_id=thread_id,
+                loop_counters=state.get("loops", {}),
+                flags=state.get("flags", []),
+            ))
+            await db.commit()
         await write_audit(db, "job_created", job_id=job_id, node="create_job", payload={"part_number": state.get("part_number")})
 
     return {"job_id": job_id, "thread_id": thread_id, "status": "CREATED", "loops": {}, "flags": []}

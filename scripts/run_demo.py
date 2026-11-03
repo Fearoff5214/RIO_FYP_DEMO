@@ -77,7 +77,7 @@ async def run_demo() -> None:
 
     # The graph continues to Stage 3 (defect detection) and pauses at Label Review
     # (because mock detector returns crack with conf=0.76 < 0.85)
-    if _is_paused_at(result, "label_review_gate"):
+    if await _paused(app, config, "label_review_gate"):
         print("\n[LABEL REVIEW] Engineer reviewing low-confidence detection...")
         defects = result.get("defects", [])
         print(f"   Defects before review: {[(d.get('defect_type'), d.get('confidence', 0)) for d in defects]}")
@@ -92,7 +92,7 @@ async def run_demo() -> None:
         _print_state_summary(result, "After Label Review")
 
     # Gate 2: expert reviews top-3 RCA
-    if _is_paused_at(result, "gate2_expert"):
+    if await _paused(app, config, "gate2_expert"):
         print("\n[GATE 2] Quality expert reviewing top-3 root causes...")
         top3 = result.get("top3", [])
         if top3:
@@ -114,7 +114,7 @@ async def run_demo() -> None:
         _print_state_summary(result, "After Gate 2")
 
     # Gate 3: approver signs off
-    if _is_paused_at(result, "gate3_approver"):
+    if await _paused(app, config, "gate3_approver"):
         print("\n[GATE 3] Approver reviewing report...")
         print("   Decision: APPROVE")
         result = await app.ainvoke(
@@ -157,15 +157,10 @@ def _print_state_summary(state: dict, label: str) -> None:
         print(f"   Top 3 causes: {[c.get('cause', '')[:30] for c in top3]}")
 
 
-def _is_paused_at(state: dict, node: str) -> bool:
-    """Check if the graph paused at the given node (heuristic)."""
-    status = state.get("status", "")
-    status_map = {
-        "label_review_gate": "AWAIT_LABEL_REVIEW",
-        "gate2_expert": "AWAIT_GATE2",
-        "gate3_approver": "AWAIT_GATE3",
-    }
-    return status == status_map.get(node, "")
+async def _paused(app, config, node: str) -> bool:
+    """True when the graph is waiting at `node` (asks the graph itself, not a status string)."""
+    snapshot = await app.aget_state(config)
+    return node in (snapshot.next or ())
 
 
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import {
-  Activity,
   ArrowUpRight,
   BookOpen,
   Boxes,
@@ -8,7 +7,6 @@ import {
   LayoutDashboard,
   ScanLine,
   Settings2,
-  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
@@ -99,13 +97,6 @@ export default function App() {
           {operationsNavigation.map((item) => <SidebarLink key={item.to} item={item} />)}
         </nav>
 
-        <div className="sidebar-bottom">
-          <div className="sidebar-quality-mark"><ShieldCheck size={17} /></div>
-          <div>
-            <p className="sidebar-bottom-title">Quality, in focus.</p>
-            <p className="sidebar-bottom-copy">Intelligent inspection for better manufacturing decisions.</p>
-          </div>
-        </div>
       </aside>
 
       <div className="app-main">
@@ -114,10 +105,6 @@ export default function App() {
             <span className="topbar-eyebrow">MANUFACTURING QUALITY</span>
             <span className="topbar-divider">/</span>
             <span className="topbar-title">{title}</span>
-          </div>
-          <div className="topbar-workspace">
-            <Activity size={15} />
-            <span>Inspection workspace</span>
           </div>
         </header>
 
@@ -138,7 +125,6 @@ export default function App() {
         </main>
         <footer className="app-footer">
           <span>Novaliseo</span>
-          <span>Intelligent inspection · Accurate insights · Superior quality</span>
         </footer>
       </div>
     </div>

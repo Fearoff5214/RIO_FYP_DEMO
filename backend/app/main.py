@@ -52,7 +52,7 @@ app.add_middleware(
 )
 
 # ── Register routers ──────────────────────────────────────────────────────────
-from app.api import auth, jobs, gates, kb, reports, actions, parts, dashboard, audit  # noqa: E402
+from app.api import auth, jobs, gates, kb, reports, actions, parts, dashboard, audit, demo, rca  # noqa: E402
 
 API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_PREFIX)
@@ -62,6 +62,8 @@ app.include_router(kb.router, prefix=API_PREFIX)
 app.include_router(reports.router, prefix=API_PREFIX)
 app.include_router(actions.router, prefix=API_PREFIX)
 app.include_router(parts.router, prefix=API_PREFIX)
+app.include_router(demo.router, prefix=API_PREFIX)
+app.include_router(rca.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
 app.include_router(audit.router, prefix=API_PREFIX)
 

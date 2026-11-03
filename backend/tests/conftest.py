@@ -11,6 +11,7 @@ import pytest_asyncio
 
 # Set mock mode before any imports
 os.environ["NOVALISEO_MODE"] = "mock"
+os.environ["NOVALISEO_LLM_PROVIDER"] = "fake"   # never call a real LLM from tests
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
 # Add backend to path

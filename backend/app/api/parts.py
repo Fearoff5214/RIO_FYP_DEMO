@@ -209,6 +209,73 @@ async def upload_part_references(
     }
 
 
+_live_yolo = None
+
+
+def _live_detector():
+    """YOLO detector on the trained weights, loaded once. Used even in mock mode so
+    the simulated sample frames get real detections instead of fixed fake boxes."""
+    global _live_yolo
+    if _live_yolo is None:
+        from app.cv.detectors.yolo import YoloDetector
+
+        weights = get_config().project_root / "models" / "best.pt"
+        if not weights.is_file():
+            raise HTTPException(status_code=503, detail="Defect model weights (models/best.pt) not found.")
+        _live_yolo = YoloDetector(str(weights))
+    return _live_yolo
+
+
+@router.post("/live-detect")
+async def live_detect(
+    image: UploadFile = File(...),
+    user: dict = Depends(get_current_user),
+):
+    """Detect defects in one camera frame and return outlines for a live overlay.
+
+    Frames showing the MS-4505-001 bracket go through the image-based bracket inspector
+    (sizes, cracks, scratches, dents, bend). Any other frame goes to the trained YOLO model.
+    """
+    from app.cv.defect_contours import refine_contour
+
+    image_bytes = await _read_image_upload(image, "Camera frame", _MAX_CAPTURE_BYTES)
+    frame = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(status_code=422, detail="Could not decode the camera frame.")
+    height, width = frame.shape[:2]
+
+    cfg = get_config()
+    from app.cv.bracket_inspector import inspect_bracket
+
+    found = inspect_bracket(frame)
+    if found is not None:
+        return {"width": width, "height": height, "mock": False, "source": "bracket-inspector", "defects": found}
+
+    tmp_dir = cfg.project_root / "tmp" / "live_detect"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    frame_path = tmp_dir / f"{uuid.uuid4()}.jpg"
+    cv2.imwrite(str(frame_path), frame)
+    try:
+        raw = await _live_detector().detect([{"uri": str(frame_path)}])
+    finally:
+        frame_path.unlink(missing_ok=True)
+
+    defects = []
+    for det in raw:
+        box = det["bbox"]
+        bbox = {
+            "x1": box["x1"], "y1": box["y1"], "x2": box["x2"], "y2": box["y2"],
+        }
+        defects.append({
+            "defect_id": det.get("defect_id"),
+            "defect_type": det["defect_type"],
+            "confidence": det["confidence"],
+            "bbox": bbox,
+            "polygon": refine_contour(frame, bbox),
+        })
+    return {"width": width, "height": height, "mock": False, "source": "yolo", "defects": defects}
+
+
 @router.post("/{part_number}/verify")
 async def verify_part_capture(
     part_number: str,

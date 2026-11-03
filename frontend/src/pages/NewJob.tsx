@@ -19,7 +19,7 @@ import {
   Video,
   X,
 } from 'lucide-react'
-import { jobsApi, partsApi } from '../api'
+import { demoApi, jobsApi, partsApi, rcaApi, type LiveDetection, type RcaResult, type RcaStatus } from '../api'
 
 type Verification = {
   status: 'Match' | 'Mismatch' | 'Needs Manual Inspection'
@@ -43,17 +43,74 @@ function errorMessage(error: any, fallback: string) {
   return error?.response?.data?.detail ?? error?.message ?? fallback
 }
 
+const DEMO_SECONDS_PER_FRAME = 6
+
+const DEFECT_COLORS: Record<string, string> = {
+  scratch: '#ffd400',
+  dent: '#ff7a00',
+  crack: '#ff2d55',
+  deformation: '#00c2ff',
+  size_mismatch: '#d946ef',
+}
+
+function DefectOverlay({ detection }: { detection: LiveDetection | null }) {
+  if (!detection) return null
+  const font = Math.max(11, detection.height / 40)
+  // keep labels inside the image: shift left when the text would run past the right edge
+  const clampX = (text: string, size: number, x: number) =>
+    Math.max(2, Math.min(x, detection.width - text.length * size * 0.62 - 2))
+  return (
+    <svg
+      className="defect-overlay"
+      viewBox={`0 0 ${detection.width} ${detection.height}`}
+      preserveAspectRatio="xMidYMid meet"
+    >
+      {detection.defects.map((defect) => {
+        const color = DEFECT_COLORS[defect.defect_type] ?? '#ff3b6b'
+        const points = defect.polygon.map(([x, y]) => `${x},${y}`).join(' ')
+        const label = `${defect.defect_type.replace('_', ' ')} ${Math.round(defect.confidence * 100)}%`
+        return (
+          <g key={defect.defect_id}>
+            <polygon points={points} fill={color} fillOpacity={0.35} stroke={color} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            {defect.polygon.map(([x, y], index) => (
+              <circle key={index} cx={x} cy={y} r={3} fill="#fff" stroke={color} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            ))}
+            <text x={clampX(label, font, defect.bbox.x1)} y={Math.max(font, defect.bbox.y1 - 4)} fill={color} fontSize={font} fontWeight={700} stroke="#000" strokeWidth={0.4} paintOrder="stroke">
+              {label}
+            </text>
+            {defect.note && (
+              <text x={clampX(defect.note, font * 0.85, defect.bbox.x1)} y={Math.min(detection.height - 4, defect.bbox.y2 + font + 2)} fill="#fff" fontSize={font * 0.85} stroke="#000" strokeWidth={0.4} paintOrder="stroke">
+                {defect.note}
+              </text>
+            )}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
 export default function NewJob() {
   const navigate = useNavigate()
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const simulationRef = useRef<number | null>(null)
+  const frameIndexRef = useRef(-1)
   const previousFrameRef = useRef<Uint8ClampedArray | null>(null)
   const stableFramesRef = useRef(0)
   const [partNumber, setPartNumber] = useState('MS-4505-001')
+  const [cameraActive, setCameraActive] = useState(false)
+  const [cameraSource, setCameraSource] = useState<'simulated' | 'live'>('simulated')
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([])
   const [selectedDevice, setSelectedDevice] = useState('')
-  const [cameraActive, setCameraActive] = useState(false)
   const [autoCapture, setAutoCapture] = useState(false)
+  const [liveMarking, setLiveMarking] = useState(false)
+  const [liveDetection, setLiveDetection] = useState<LiveDetection | null>(null)
+  const [captureDetection, setCaptureDetection] = useState<LiveDetection | null>(null)
+  const [rcaStatus, setRcaStatus] = useState<RcaStatus | null>(null)
+  const [rcaResult, setRcaResult] = useState<RcaResult | null>(null)
+  const [rcaLoading, setRcaLoading] = useState(false)
+  const [rcaError, setRcaError] = useState('')
   const [capturedImage, setCapturedImage] = useState<Blob | null>(null)
   const [capturedPreview, setCapturedPreview] = useState('')
   const [references, setReferences] = useState<References | null>(null)
@@ -65,44 +122,129 @@ export default function NewJob() {
   const [error, setError] = useState('')
   const [referenceError, setReferenceError] = useState('')
 
-  const attachCamera = useCallback(async (deviceId?: string) => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('Camera access is not available. Use localhost or HTTPS and enable browser camera permissions.')
+  const startSimulatedCamera = async () => {
+    setError('')
+    try {
+      // Simulated input: cycle the repo's sample images through a canvas stream.
+      const samples = (await demoApi.samples()).data
+      if (!samples.length) throw new Error('No sample images found in the samples folder.')
+      const images = await Promise.all(samples.map(async (sample) => {
+        const blob = (await demoApi.sample(sample.name)).data
+        return createImageBitmap(blob)
+      }))
+      const canvas = document.createElement('canvas')
+      canvas.width = 480
+      canvas.height = 480
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('Could not start the simulated camera.')
+      const startedAt = Date.now()
+      const draw = () => {
+        const index = Math.floor((Date.now() - startedAt) / DEMO_SECONDS_PER_FRAME / 1000) % images.length
+        if (index !== frameIndexRef.current) {
+          frameIndexRef.current = index
+          setLiveDetection(null)          // never leave the previous frame's highlights on the new image
+        }
+        context.drawImage(images[index], 0, 0, canvas.width, canvas.height)
+      }
+      draw()
+      simulationRef.current = window.setInterval(draw, 100)
+      const stream = canvas.captureStream(10)
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+      }
+      setCameraSource('simulated')
+      setCameraActive(true)
+    } catch (cameraError) {
+      setError(errorMessage(cameraError, 'Could not start the simulated camera.'))
+      setCameraActive(false)
     }
+  }
+
+  const attachLiveCamera = useCallback(async (deviceId?: string) => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Camera access is not available. Use localhost or HTTPS and allow camera permission in the browser.')
+    }
+    if (simulationRef.current !== null) window.clearInterval(simulationRef.current)
+    simulationRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     const stream = await navigator.mediaDevices.getUserMedia({
       video: deviceId ? { deviceId: { exact: deviceId } } : true,
       audio: false,
     })
     streamRef.current = stream
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream
-      await videoRef.current.play()
-    }
+    frameIndexRef.current = -1
     setSelectedDevice(deviceId ?? stream.getVideoTracks()[0]?.getSettings().deviceId ?? '')
+    setCameraSource('live')
     setCameraActive(true)
   }, [])
 
-  const startCamera = async () => {
+  const startLiveCamera = async () => {
     setError('')
     try {
-      await attachCamera()
-      const devices = (await navigator.mediaDevices.enumerateDevices())
-        .filter((device) => device.kind === 'videoinput')
+      await attachLiveCamera()
+      const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput')
       setCameraDevices(devices)
       const iriun = devices.find((device) => /iriun/i.test(device.label))
-      if (iriun) await attachCamera(iriun.deviceId)
+      if (iriun) await attachLiveCamera(iriun.deviceId)
     } catch (cameraError) {
-      setError(errorMessage(cameraError, 'Could not connect to a camera. Check that Iriun Webcam is running and accessible.'))
+      setError(errorMessage(cameraError, 'Could not connect to a camera. Check that a camera is attached and that the browser has permission to use it.'))
       setCameraActive(false)
     }
   }
 
+  useEffect(() => {
+    rcaApi.status().then((response) => setRcaStatus(response.data)).catch(() => setRcaStatus(null))
+  }, [])
+
+  const analyseDefects = captureDetection?.defects.length ? captureDetection.defects : (liveDetection?.defects ?? [])
+
+  const analyseRootCause = async () => {
+    if (!analyseDefects.length) return
+    setRcaLoading(true)
+    setRcaError('')
+    try {
+      const response = await rcaApi.analyze({
+        defects: analyseDefects.slice(0, 20).map((defect) => ({
+          defect_type: defect.defect_type,
+          confidence: defect.confidence,
+          note: defect.note ?? null,
+        })),
+      })
+      setRcaResult(response.data)
+    } catch (analysisError) {
+      setRcaResult(null)
+      setRcaError(errorMessage(analysisError, 'Root cause analysis failed.'))
+    } finally {
+      setRcaLoading(false)
+    }
+  }
+
+  const downloadRca = async (format: string) => {
+    if (!rcaResult) return
+    try {
+      const response = await rcaApi.download(rcaResult.documents[format])
+      const url = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `novaliseo_rca.${format}`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (downloadError) {
+      setRcaError(errorMessage(downloadError, 'Could not download the document.'))
+    }
+  }
+
   const stopCamera = () => {
+    if (simulationRef.current !== null) window.clearInterval(simulationRef.current)
+    simulationRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     setCameraActive(false)
     setAutoCapture(false)
+    setLiveMarking(false)
+    setLiveDetection(null)
   }
 
   useEffect(() => {
@@ -136,6 +278,8 @@ export default function NewJob() {
         return
       }
       setCapturedImage(blob)
+      setCaptureDetection(null)
+      partsApi.liveDetect(blob).then((response) => setCaptureDetection(response.data)).catch(() => setCaptureDetection(null))
       setCapturedPreview(URL.createObjectURL(blob))
       setVerification(null)
       setError('')
@@ -181,6 +325,7 @@ export default function NewJob() {
   }, [partNumber])
 
   useEffect(() => () => {
+    if (simulationRef.current !== null) window.clearInterval(simulationRef.current)
     streamRef.current?.getTracks().forEach((track) => track.stop())
   }, [])
 
@@ -196,6 +341,41 @@ export default function NewJob() {
       }
     }
   }, [referenceUrls])
+
+  useEffect(() => {
+    if (!liveMarking || !cameraActive) {
+      setLiveDetection(null)
+      return
+    }
+    let cancelled = false
+    let inFlight = false
+    const canvas = document.createElement('canvas')
+    const timer = window.setInterval(() => {
+      const video = videoRef.current
+      if (inFlight || !video || video.videoWidth === 0) return
+      const scale = Math.min(1, 640 / video.videoWidth)
+      canvas.width = Math.round(video.videoWidth * scale)
+      canvas.height = Math.round(video.videoHeight * scale)
+      canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height)
+      inFlight = true
+      const sentFor = frameIndexRef.current
+      canvas.toBlob(async (blob) => {
+        try {
+          if (!blob) return
+          const response = await partsApi.liveDetect(blob)
+          if (!cancelled && sentFor === frameIndexRef.current) setLiveDetection(response.data)   // drop stale results
+        } catch {
+          if (!cancelled) setLiveDetection(null)
+        } finally {
+          inFlight = false
+        }
+      }, 'image/jpeg', 0.7)
+    }, 900)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [liveMarking, cameraActive])
 
   useEffect(() => {
     if (!autoCapture || !cameraActive) return
@@ -304,7 +484,6 @@ export default function NewJob() {
     : verification?.status === 'Mismatch'
       ? 'verification-result-mismatch'
       : 'verification-result-manual'
-  const iriunDetected = cameraDevices.some((device) => /iriun/i.test(device.label))
 
   return (
     <div className="inspection-page space-y-5">
@@ -376,7 +555,7 @@ export default function NewJob() {
             </div>
             <div className={`status-pill ${cameraActive ? 'status-green' : 'status-neutral'}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${cameraActive ? 'bg-green-600' : 'bg-slate-400'}`} />
-              {cameraActive ? (iriunDetected ? 'Iriun connected' : 'Camera connected') : 'Camera not connected'}
+              {cameraActive ? (cameraSource === 'live' ? 'Live camera connected' : 'Simulated camera running') : 'Camera not connected'}
             </div>
           </div>
 
@@ -387,10 +566,11 @@ export default function NewJob() {
                   <span className="eyebrow">Live feed</span>
                   {cameraActive && <span className="flex items-center gap-1.5 text-[10px] text-emerald-700"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-600" />LIVE</span>}
                 </div>
-                <div className="camera-stage aspect-video">
+                <div className={`camera-stage aspect-video${cameraSource === 'live' ? ' stage-wide' : ''}`}>
                   {cameraActive ? (
                     <>
                       <video ref={videoRef} autoPlay playsInline muted className="relative z-[1] h-full w-full object-contain" />
+                      <DefectOverlay detection={liveDetection} />
                       <div className="pointer-events-none absolute inset-[12%] z-[2] rounded border border-dashed border-white/75 shadow-[0_0_0_999px_rgba(27,43,59,0.12)]" />
                       <div className="pointer-events-none absolute bottom-2 left-2 z-[3] rounded bg-slate-900/70 px-2 py-1 text-[9px] font-medium text-white">Center component in frame</div>
                     </>
@@ -398,7 +578,7 @@ export default function NewJob() {
                     <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
                       <div className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-400"><Camera size={19} /></div>
                       <p className="mt-3 text-xs font-semibold text-slate-600">Camera preview is offline</p>
-                      <p className="mt-1 max-w-[230px] text-[10px] leading-4 text-slate-500">Connect Iriun Webcam or choose another available camera to begin.</p>
+                      <p className="mt-1 max-w-[230px] text-[10px] leading-4 text-slate-500">Start the simulated camera to play the sample inspection inputs, or connect a live camera.</p>
                     </div>
                   )}
                 </div>
@@ -413,9 +593,12 @@ export default function NewJob() {
                   <span className="eyebrow">Latest capture</span>
                   {capturedImage && <span className="status-pill status-blue"><Check size={12} />Captured</span>}
                 </div>
-                <div className="image-stage aspect-video">
+                <div className={`image-stage stage-16x9${cameraSource === 'live' ? ' stage-wide' : ''}`}>
                   {capturedPreview ? (
-                    <img src={capturedPreview} alt="Latest captured component" />
+                    <>
+                      <img src={capturedPreview} alt="Latest captured component" />
+                      <DefectOverlay detection={captureDetection} />
+                    </>
                   ) : (
                     <div className="flex flex-col items-center px-5 text-center">
                       <FileImage size={22} className="text-slate-300" />
@@ -430,29 +613,36 @@ export default function NewJob() {
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
               <div className="flex flex-wrap items-center gap-2">
                 {!cameraActive ? (
-                  <button type="button" onClick={startCamera} className="btn-primary">
-                    <Camera size={14} /> Connect camera
-                  </button>
+                  <>
+                    <button type="button" onClick={startSimulatedCamera} className="btn-primary">
+                      <Camera size={14} /> Start simulated camera
+                    </button>
+                    <button type="button" onClick={startLiveCamera} className="btn-secondary">
+                      <Video size={14} /> Use live camera
+                    </button>
+                  </>
                 ) : (
                   <>
-                    <select
-                      value={selectedDevice}
-                      onChange={async (event) => {
-                        try {
-                          await attachCamera(event.target.value)
-                        } catch (cameraError) {
-                          setError(errorMessage(cameraError, 'Could not switch camera device.'))
-                        }
-                      }}
-                      className="max-w-[210px] px-2.5 text-[11px]"
-                      aria-label="Camera device"
-                    >
-                      {cameraDevices.map((device, index) => (
-                        <option key={device.deviceId} value={device.deviceId}>
-                          {device.label || `Camera ${index + 1}`}
-                        </option>
-                      ))}
-                    </select>
+                    {cameraSource === 'live' && cameraDevices.length > 0 && (
+                      <select
+                        value={selectedDevice}
+                        onChange={async (event) => {
+                          try {
+                            await attachLiveCamera(event.target.value)
+                          } catch (cameraError) {
+                            setError(errorMessage(cameraError, 'Could not switch camera device.'))
+                          }
+                        }}
+                        className="max-w-[210px] px-2.5 text-[11px]"
+                        aria-label="Camera device"
+                      >
+                        {cameraDevices.map((device, index) => (
+                          <option key={device.deviceId} value={device.deviceId}>
+                            {device.label || `Camera ${index + 1}`}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <button type="button" onClick={captureFrame} className="btn-primary">
                       <Camera size={14} /> Capture frame
                     </button>
@@ -461,9 +651,16 @@ export default function NewJob() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                {cameraActive && cameraDevices.length > 0 && !iriunDetected && (
-                  <span className="flex items-center gap-1 text-[10px] text-amber-700"><AlertCircle size={13} />Iriun not detected</span>
-                )}
+                <label className="inline-flex items-center gap-2 text-[11px] text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={liveMarking}
+                    onChange={(event) => setLiveMarking(event.target.checked)}
+                    disabled={!cameraActive}
+                    className="accent-[#426f98]"
+                  />
+                  Mark defects live
+                </label>
                 <label className="inline-flex items-center gap-2 text-[11px] text-slate-600">
                   <input
                     type="checkbox"
@@ -476,6 +673,45 @@ export default function NewJob() {
                 </label>
               </div>
             </div>
+            <section className="rca-panel" aria-label="Root cause analysis">
+              <div className="rca-head">
+                <strong>Root cause analysis</strong>
+                <span className="rca-badge">
+                  {rcaStatus ? (rcaStatus.ai_enabled ? `AI: ${rcaStatus.provider}${rcaStatus.model ? ` (${rcaStatus.model})` : ''}` : 'Offline template (no GEMINI_API_KEY)') : 'status unknown'}
+                </span>
+              </div>
+              <p className="rca-hint">
+                {analyseDefects.length
+                  ? `${analyseDefects.length} defect${analyseDefects.length === 1 ? '' : 's'} detected. Analyse them to get the cause, the reason and the solution as a document.`
+                  : 'Capture a frame (or mark defects live) so there are detected defects to analyse.'}
+              </p>
+              <button type="button" onClick={analyseRootCause} disabled={!analyseDefects.length || rcaLoading} className="btn-primary">
+                {rcaLoading ? <LoaderCircle size={14} className="animate-spin" /> : <ScanLine size={14} />} Analyse root cause (AI)
+              </button>
+              {rcaError && <p className="rca-error">{rcaError}</p>}
+              {rcaResult && (
+                <div className="rca-result">
+                  {!rcaResult.ai_used && (
+                    <p className="rca-warn">The AI model was not used ({rcaResult.model}). This is the offline template, not an analysis. Add GEMINI_API_KEY to .env and restart the API.</p>
+                  )}
+                  <h4>Cause</h4>
+                  <p>{rcaResult.root_cause.cause}{rcaResult.root_cause.confidence != null ? ` (${Math.round(rcaResult.root_cause.confidence * 100)}%)` : ''}</p>
+                  <h4>Reason</h4>
+                  <p>{rcaResult.root_cause.rationale}</p>
+                  <h4>Solution</h4>
+                  <ul>{rcaResult.root_cause.corrective_actions.map((action, index) => <li key={`c${index}`}>{action}</li>)}</ul>
+                  <h4>Prevention</h4>
+                  <ul>{rcaResult.root_cause.preventive_actions.map((action, index) => <li key={`p${index}`}>{action}</li>)}</ul>
+                  <div className="rca-downloads">
+                    {Object.keys(rcaResult.documents).map((format) => (
+                      <button key={format} type="button" className="btn-secondary" onClick={() => downloadRca(format)}>
+                        <Upload size={13} /> {format.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
             {autoCapture && <p className="flex items-center gap-1.5 text-[10px] text-[#426f98]"><LoaderCircle size={13} className="animate-spin" />Waiting for a steady, detailed camera view…</p>}
           </div>
         </section>

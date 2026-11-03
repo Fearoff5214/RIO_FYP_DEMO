@@ -558,6 +558,51 @@ textarea::placeholder {
   background-size: 14px 14px;
 }
 
+/* Tailwind utilities are not generated in this build (no PostCSS config), so the stage sizing and
+   defect overlay use plain CSS instead of utility classes. */
+/* The simulated camera frames are square, so the stage is square and the frame hugs the image. */
+.camera-stage,
+.image-stage.stage-16x9 {
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
+}
+
+/* A live camera is usually 16:9, so its stage is wide instead of square. */
+.camera-stage.stage-wide,
+.image-stage.stage-16x9.stage-wide {
+  aspect-ratio: 16 / 9;
+  max-width: none;
+}
+
+.camera-stage video {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.image-stage.stage-16x9 {
+  position: relative;
+  max-height: none;
+}
+
+.image-stage.stage-16x9 img {
+  max-height: none;
+}
+
+.defect-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .image-stage {
   display: flex;
   min-height: 170px;
@@ -1745,3 +1790,24 @@ tbody tr { transition: background-color 120ms ease; }
   .gate1-submit-row { align-items: stretch; flex-direction: column; }
   .gate1-submit-button { width: 100%; }
 }
+
+/* Root cause analysis panel (New Job) */
+.rca-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #dce4ec;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 12px;
+}
+.rca-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.rca-badge { padding: 2px 8px; border-radius: 999px; background: #eef3f8; color: #426f98; font-size: 10px; font-weight: 600; }
+.rca-hint { margin: 0; color: #5d6b7a; font-size: 11px; }
+.rca-error { margin: 0; color: #b01e2e; font-size: 11px; }
+.rca-warn { margin: 0; padding: 6px 8px; border-radius: 6px; background: #fff4e0; color: #8a5300; font-size: 11px; }
+.rca-result { display: grid; gap: 4px; }
+.rca-result h4 { margin: 6px 0 0; font-size: 11px; font-weight: 700; color: #1f3a5f; text-transform: uppercase; letter-spacing: 0.04em; }
+.rca-result p, .rca-result ul { margin: 0; font-size: 12px; color: #2b3a4a; }
+.rca-result ul { padding-left: 18px; }
+.rca-downloads { display: flex; gap: 8px; margin-top: 8px; }

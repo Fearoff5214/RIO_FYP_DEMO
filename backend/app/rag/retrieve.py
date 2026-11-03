@@ -93,7 +93,7 @@ async def _fetch_chunks(db, query: dict, filters: list[str]) -> list[dict]:
         return _get_seed_chunks()
 
     try:
-        from sqlalchemy import select
+        from sqlalchemy import func, or_, select
         from app.db.models import KBChunk
 
         stmt = select(KBChunk)
@@ -105,13 +105,16 @@ async def _fetch_chunks(db, query: dict, filters: list[str]) -> list[dict]:
         defect_types = query.get("defect_types", [])
 
         if "part" in filters and part:
-            stmt = stmt.where(KBChunk.part == part)
+            stmt = stmt.where(or_(KBChunk.part == part, KBChunk.part.is_(None)))   # generic chunks apply to every part
         if "material" in filters and material:
-            stmt = stmt.where(KBChunk.material == material)
+            # chunks store a short tag ("spcc"), the part master a full name ("SPCC Steel")
+            tokens = material.lower().split()
+            stmt = stmt.where(or_(*[func.lower(KBChunk.material).like(f"%{t}%") for t in tokens]))
         if "process" in filters and process:
-            stmt = stmt.where(KBChunk.process == process)
-        if defect_types:
-            stmt = stmt.where(KBChunk.defect_type.in_(defect_types))
+            stmt = stmt.where(func.lower(KBChunk.process) == process.lower())
+        known = [d for d in defect_types if d in ("scratch", "dent", "crack", "deformation")]
+        if known:                                   # e.g. "size_mismatch" has no tagged chunks: do not filter on it
+            stmt = stmt.where(KBChunk.defect_type.in_(known))
 
         result = await db.execute(stmt)
         rows = result.scalars().all()
@@ -143,6 +146,7 @@ async def graph_expand(defect_types: list[str]) -> list[dict]:
         "dent": ["Improper Bending Force", "Fixture defect", "Tooling damage"],
         "crack": ["Material Inconsistency", "Excessive stress", "Hardness variation"],
         "deformation": ["Improper Bending Force", "Springback", "Tool Wear/Die Damage"],
+        "size_mismatch": ["Improper Bending Force", "Springback", "Tool Wear/Die Damage", "Fixture misalignment"],
     }
 
     nodes = []

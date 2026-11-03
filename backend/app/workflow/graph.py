@@ -102,9 +102,67 @@ from app.workflow.routing import (
 )
 
 
+from app.workflow.nodes.loops import flag_low_confidence, flag_low_evidence, retry_evidence, retry_llm  # noqa: E402
+
+
+def _to_builtin(obj):
+    """Convert numpy scalars/arrays to plain Python so the checkpointer (msgpack) can store the state."""
+    import numpy as np
+
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: _to_builtin(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_builtin(v) for v in obj]
+    return obj
+
+
+def _sanitized(fn):
+    """Wrap a node so (1) it gets a database session when it asks for one (`db` keyword) and
+    (2) everything it returns is checkpoint-serialisable.
+
+    Nodes were written as `async def node(state, *, db=None)` but nothing ever passed `db`, so every
+    save step (predictions, final RCA, reports, actions, audit) was silently skipped. A database error
+    inside a node is logged loudly and the node is re-run without persistence, so a storage problem
+    never aborts an inspection.
+    """
+    import functools
+    import inspect
+
+    wants_db = "db" in inspect.signature(fn).parameters
+
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        if wants_db and kwargs.get("db") is None:
+            from sqlalchemy.exc import SQLAlchemyError
+
+            from app.core.logging import get_logger
+            from app.db.session import _get_session_factory
+
+            try:
+                async with _get_session_factory()() as session:
+                    return _to_builtin(await fn(*args, db=session, **kwargs))
+            except SQLAlchemyError as exc:
+                get_logger(__name__).error('"node":"%s","db_error":"%s"', fn.__name__, str(exc)[:200])
+                return _to_builtin(await fn(*args, db=None, **kwargs))
+        return _to_builtin(await fn(*args, **kwargs))
+
+    return wrapper
+
+
 def build_graph() -> StateGraph:
     """Build and return the compiled inspection workflow graph."""
     g = StateGraph(InspectionState)
+
+    _add_node = g.add_node
+
+    def add_node(name, fn=None, **kwargs):          # every node's output is made msgpack-safe
+        return _add_node(name, _sanitized(fn) if callable(fn) else fn, **kwargs)
+
+    g.add_node = add_node
 
     # ── Stage 1 nodes ─────────────────────────────────────────────────────
     g.add_node("read_part_id", read_part_id)
@@ -140,6 +198,10 @@ def build_graph() -> StateGraph:
     # ── Stage 4 nodes ─────────────────────────────────────────────────────
     g.add_node("build_query", build_query)
     g.add_node("apply_filters", apply_filters)
+    g.add_node("retry_evidence", retry_evidence)
+    g.add_node("flag_low_evidence", flag_low_evidence)
+    g.add_node("retry_llm", retry_llm)
+    g.add_node("flag_low_confidence", flag_low_confidence)
     g.add_node("embed_query", embed_query)
     g.add_node("graph_expand", graph_expand)
     g.add_node("set_limits", set_limits)
@@ -240,8 +302,11 @@ def build_graph() -> StateGraph:
     g.add_edge("hybrid_retrieve", "rerank")
     g.add_conditional_edges("rerank", route_evidence, {
         "assemble_evidence": "assemble_evidence",
-        "apply_filters": "apply_filters",  # L4 relax
+        "retry_evidence": "retry_evidence",          # L4 relax
+        "flag_low_evidence": "flag_low_evidence",    # L4 exhausted
     })
+    g.add_edge("retry_evidence", "apply_filters")
+    g.add_edge("flag_low_evidence", "assemble_evidence")
     g.add_edge("assemble_evidence", "assemble_context")
 
     # ── Stage 5 edges ─────────────────────────────────────────────────────
@@ -252,8 +317,11 @@ def build_graph() -> StateGraph:
     g.add_edge("calibrate", "format_top3")
     g.add_conditional_edges("format_top3", route_output_valid, {
         "save_ranked": "save_ranked",
-        "llm_reason": "llm_reason",  # L5 regenerate
+        "retry_llm": "retry_llm",                      # L5 regenerate
+        "flag_low_confidence": "flag_low_confidence",  # L5 exhausted
     })
+    g.add_edge("retry_llm", "llm_reason")
+    g.add_edge("flag_low_confidence", "save_ranked")
     g.add_edge("save_ranked", "gate2_expert")
 
     # ── Stage 6 edges ─────────────────────────────────────────────────────

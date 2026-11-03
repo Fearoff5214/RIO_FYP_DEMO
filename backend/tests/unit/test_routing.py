@@ -77,17 +77,30 @@ def test_route_evidence_sufficient():
 
 
 def test_route_evidence_l4_retry():
+    # routing only decides; the L4 counter is persisted by the retry_evidence node
     state = {"evidence_sufficient": False, "loops": {}, "flags": []}
-    route = route_evidence(state)
-    assert route == "apply_filters"
-    assert state["loops"]["L4"] == 1
+    assert route_evidence(state) == "retry_evidence"
 
 
 def test_route_evidence_l4_exhausted():
-    state = {"evidence_sufficient": False, "loops": {"L4": 2}, "flags": []}
-    route = route_evidence(state)
-    assert route == "assemble_evidence"
-    assert "low_evidence" in state["flags"]
+    state = {"evidence_sufficient": False, "loops": {"L4": 1}, "flags": []}
+    assert route_evidence(state) == "flag_low_evidence"
+
+
+@pytest.mark.asyncio
+async def test_loop_nodes_persist_counters_and_flags():
+    from app.workflow.nodes.loops import flag_low_evidence, retry_evidence, retry_llm
+
+    assert (await retry_evidence({"loops": {"L4": 0}}))["loops"]["L4"] == 1
+    update = await flag_low_evidence({"loops": {"L4": 1}, "flags": []})
+    assert update["loops"]["L4"] == 2 and "low_evidence" in update["flags"]
+    update = await retry_llm({"loops": {}, "flags": []})
+    assert update["loops"]["L5"] == 1 and "low_confidence" in update["flags"]
+
+
+def test_route_output_valid_retries_then_flags():
+    assert route_output_valid({"output_valid": False, "loops": {}}) == "retry_llm"
+    assert route_output_valid({"output_valid": False, "loops": {"L5": 1}}) == "flag_low_confidence"
 
 
 def test_route_gate1_confirm():

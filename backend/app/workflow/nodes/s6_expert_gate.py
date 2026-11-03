@@ -44,8 +44,10 @@ async def finalize_actions(state: InspectionState) -> dict:
     effect = selected.get("effect", "")
     precautions = selected.get("precautions", [])
 
-    corrective = gate2.get("corrective", []) or precautions[:2]
-    preventive = gate2.get("preventive", []) or precautions[2:]
+    # expert input wins; otherwise the AI's own corrective / preventive actions, else split the precautions
+    corrective = gate2.get("corrective", []) or selected.get("corrective_actions") or precautions[:2]
+    preventive = gate2.get("preventive", []) or selected.get("preventive_actions") or precautions[2:]
+    edited = bool(gate2.get("edited_cause"))
 
     final_rca = {
         "job_id": state.get("job_id"),
@@ -54,9 +56,17 @@ async def finalize_actions(state: InspectionState) -> dict:
         "effect": effect,
         "corrective_actions": corrective,
         "preventive_actions": preventive,
-        "edited": bool(gate2.get("edited_cause")),
+        "edited": edited,
         "reviewer_id": gate2.get("reviewer_id"),
         "finalized_at": datetime.now(timezone.utc).isoformat(),
+        # the reason: the expert's own text when they edited the cause, otherwise the AI's rationale
+        "rationale": (gate2.get("reason") or selected.get("rationale")) if edited else selected.get("rationale"),
+        "ai_rationale": selected.get("rationale"),
+        "precautions": precautions,
+        "verification": selected.get("verification"),
+        "citations": selected.get("citations", []),
+        "confidence": selected.get("confidence_cal"),
+        "model_version": selected.get("model_version"),
     }
 
     return {"final_rca": final_rca}
@@ -83,6 +93,10 @@ async def save_decision(state: InspectionState, *, db=None) -> dict:
         edited=final_rca.get("edited", False),
         reviewer_id=final_rca.get("reviewer_id"),
         finalized_at=datetime.now(timezone.utc),
+        rationale=final_rca.get("rationale"),
+        citations=final_rca.get("citations"),
+        confidence=final_rca.get("confidence"),
+        model_version=final_rca.get("model_version"),
     )
     db.add(rca_row)
 

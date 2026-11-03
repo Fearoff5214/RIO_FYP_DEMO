@@ -57,6 +57,30 @@ export default function Reports() {
           )}
         </div>
       </div>
+
+      {(report.rca_docx_uri || report.rca_pdf_uri || report.rca_md_uri) && (
+        <div className="bg-gray-900 rounded-lg p-4 space-y-3">
+          <h2 className="font-semibold text-gray-300">Root Cause Analysis Document</h2>
+          <p className="text-xs text-gray-500">Problem, cause, reason, supporting evidence, solution and prevention for this inspection.</p>
+          <div className="flex gap-3 flex-wrap">
+            {report.rca_docx_uri && (
+              <a href={reportsApi.rcaUrl(jobId!, 'docx')} download className="bg-purple-800 hover:bg-purple-700 text-purple-200 px-5 py-2 rounded font-semibold">
+                📝 RCA Word
+              </a>
+            )}
+            {report.rca_pdf_uri && (
+              <a href={reportsApi.rcaUrl(jobId!, 'pdf')} download className="bg-blue-800 hover:bg-blue-700 text-blue-200 px-5 py-2 rounded font-semibold">
+                📄 RCA PDF
+              </a>
+            )}
+            {report.rca_md_uri && (
+              <a href={reportsApi.rcaUrl(jobId!, 'md')} download className="bg-gray-700 hover:bg-gray-600 text-gray-200 px-5 py-2 rounded font-semibold">
+                🗒 RCA Markdown
+              </a>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -28,6 +28,7 @@ async def assemble_context(state: InspectionState) -> dict:
                 "severity": d.get("severity"),
                 "size_mm2": d.get("size_mm2"),
                 "confidence": d.get("confidence"),
+                "detail": d.get("note"),
             }
             for d in defects
         ],
@@ -136,6 +137,10 @@ async def save_ranked(state: InspectionState, *, db=None) -> dict:
                 confidence_cal=c.get("confidence_cal", 0.0),
                 evidence=c.get("citations", []),
                 model_version=c.get("model_version"),
+                rationale=c.get("rationale"),
+                corrective_actions=c.get("corrective_actions"),
+                preventive_actions=c.get("preventive_actions"),
+                verification=c.get("verification"),
             )
             db.add(row)
         await db.commit()

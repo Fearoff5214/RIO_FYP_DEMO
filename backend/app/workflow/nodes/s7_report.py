@@ -40,6 +40,10 @@ async def compose_report(state: InspectionState) -> dict:
         "measurements": measurements,
         "defects": defects,
         "root_cause": final_rca if not fast_path else None,
+        "rca": None if fast_path else {
+            "ranked": state.get("top3", []) or [],
+            "evidence": (state.get("evidence_pack", {}) or {}).get("sources", []),
+        },
         "flags": state.get("flags", []),
         "gate1_reviewer": gate1.get("reviewer_id"),
         "gate2_reviewer": gate2.get("reviewer_id") if not fast_path else None,
@@ -76,6 +80,14 @@ async def render_files(state: InspectionState) -> dict:
     logger.info('"node":"render_files","job_id":"%s"', job_id)
 
     uris = await render_report(report)
+    if report.get("root_cause"):
+        from app.reports.rca_document import render_rca_documents
+
+        try:
+            rca = await render_rca_documents(report)
+            uris = {**uris, **{f"rca_{k}": v for k, v in rca.items()}}
+        except Exception as exc:                                 # the main report must not fail because of this
+            logger.error('"node":"render_files","rca_document_error":"%s"', str(exc)[:200])
     return {"report_uris": uris, "status": "AWAIT_GATE3"}
 
 
@@ -126,6 +138,9 @@ async def esign_archive(state: InspectionState, *, db=None) -> dict:
             pdf_uri=signed_uri or report_uris.get("pdf"),
             xlsx_uri=report_uris.get("xlsx"),
             docx_uri=report_uris.get("docx"),
+            rca_docx_uri=report_uris.get("rca_docx"),
+            rca_pdf_uri=report_uris.get("rca_pdf"),
+            rca_md_uri=report_uris.get("rca_md"),
             approved_by=gate3.get("approved_by"),
             approved_at=datetime.now(timezone.utc),
             signature_uri=sig_uri,

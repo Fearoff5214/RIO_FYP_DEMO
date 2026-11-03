@@ -207,6 +207,11 @@ async def get_gate2(
                 "confidence_raw": p.confidence_raw,
                 "confidence_cal": p.confidence_cal,
                 "evidence": p.evidence,
+                "rationale": p.rationale,
+                "corrective_actions": p.corrective_actions,
+                "preventive_actions": p.preventive_actions,
+                "verification": p.verification,
+                "model_version": p.model_version,
             }
             for p in preds
         ],

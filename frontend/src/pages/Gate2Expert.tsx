@@ -49,6 +49,18 @@ export default function Gate2Expert() {
             </div>
             <h3 className="font-semibold text-white text-sm mb-1">{c.cause}</h3>
             <p className="text-xs text-gray-400 mb-2">{c.effect}</p>
+            {c.rationale && (
+              <p className="text-xs text-gray-300 mb-2"><span className="font-semibold">Reason:</span> {c.rationale}</p>
+            )}
+            {c.corrective_actions?.length > 0 && (
+              <div className="text-xs text-gray-400 mb-2">
+                <div className="font-semibold text-gray-300">Solution</div>
+                {c.corrective_actions.map((a: string, i: number) => (
+                  <div key={i}>• {a}</div>
+                ))}
+              </div>
+            )}
+            {c.model_version && <div className="text-[10px] text-gray-500 mb-1">Model: {c.model_version}</div>}
             <div className="text-xs text-gray-500 space-y-0.5">
               {c.precautions?.slice(0, 3).map((p: string, i: number) => (
                 <div key={i}>• {p}</div>

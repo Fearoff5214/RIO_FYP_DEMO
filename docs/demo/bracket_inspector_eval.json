@@ -1,0 +1,169 @@
+{
+ "frames": 320,
+ "per_group": 40,
+ "seed": 2026,
+ "classes": {
+  "crack": {
+   "tp": 33,
+   "fp": 2,
+   "fn": 7,
+   "precision": 0.943,
+   "recall": 0.825,
+   "f1": 0.88,
+   "localisation": 0.97
+  },
+  "scratch": {
+   "tp": 33,
+   "fp": 25,
+   "fn": 7,
+   "precision": 0.569,
+   "recall": 0.825,
+   "f1": 0.673,
+   "localisation": 0.939
+  },
+  "dent": {
+   "tp": 40,
+   "fp": 18,
+   "fn": 0,
+   "precision": 0.69,
+   "recall": 1.0,
+   "f1": 0.816,
+   "localisation": 1.0
+  },
+  "deformation": {
+   "tp": 29,
+   "fp": 0,
+   "fn": 11,
+   "precision": 1.0,
+   "recall": 0.725,
+   "f1": 0.841,
+   "localisation": null
+  },
+  "length": {
+   "tp": 39,
+   "fp": 15,
+   "fn": 1,
+   "precision": 0.722,
+   "recall": 0.975,
+   "f1": 0.83,
+   "localisation": null
+  },
+  "hole_dia": {
+   "tp": 38,
+   "fp": 0,
+   "fn": 2,
+   "precision": 1.0,
+   "recall": 0.95,
+   "f1": 0.974,
+   "localisation": 1.0
+  },
+  "hole_pos": {
+   "tp": 40,
+   "fp": 15,
+   "fn": 0,
+   "precision": 0.727,
+   "recall": 1.0,
+   "f1": 0.842,
+   "localisation": 1.0
+  }
+ },
+ "overall": {
+  "precision": 0.771,
+  "recall": 0.9
+ },
+ "good_frames_clean": "32/40",
+ "measurement_error": {
+  "bend_deg": {
+   "mean": 0.53,
+   "p95": 0.636,
+   "max": 8.327,
+   "n": 29
+  },
+  "length_mm": {
+   "mean": 0.055,
+   "p95": 0.079,
+   "max": 0.095,
+   "n": 39
+  },
+  "hole_dia_mm": {
+   "mean": 0.039,
+   "p95": 0.056,
+   "max": 0.067,
+   "n": 38
+  },
+  "hole_pos_mm": {
+   "mean": 0.052,
+   "p95": 0.095,
+   "max": 0.103,
+   "n": 40
+  }
+ },
+ "inspector_ms": {
+  "mean": 56.8,
+  "p95": 67.8
+ },
+ "exact_match_by_group": {
+  "good": 0.8,
+  "crack": 0.7,
+  "scratch": 0.75,
+  "dent": 0.925,
+  "deformation": 0.55,
+  "length": 0.85,
+  "hole_dia": 0.875,
+  "hole_pos": 0.925
+ },
+ "false_alarms_by_group": {
+  "good": {
+   "scratch": 4,
+   "hole_pos": 4,
+   "dent": 1,
+   "length": 2
+  },
+  "crack": {
+   "scratch": 2,
+   "dent": 3,
+   "length": 1
+  },
+  "scratch": {
+   "dent": 9,
+   "crack": 2
+  },
+  "dent": {
+   "scratch": 3
+  },
+  "deformation": {
+   "length": 12,
+   "hole_pos": 11,
+   "scratch": 6,
+   "dent": 2
+  },
+  "length": {
+   "scratch": 5,
+   "dent": 1
+  },
+  "hole_dia": {
+   "scratch": 2,
+   "dent": 2
+  },
+  "hole_pos": {
+   "scratch": 3
+  }
+ },
+ "misses_by_group": {
+  "crack": {
+   "crack": 7
+  },
+  "scratch": {
+   "scratch": 7
+  },
+  "deformation": {
+   "deformation": 11
+  },
+  "length": {
+   "length": 1
+  },
+  "hole_dia": {
+   "hole_dia": 2
+  }
+ }
+}

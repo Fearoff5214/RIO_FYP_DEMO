@@ -1,0 +1,105 @@
+/* GENERATED from index.css by gen_theme.py: dark overrides for hard-coded light colours. */
+.page-heading h1 { color: var(--text); }
+.page-heading p { color: var(--text-2); }
+.panel-title { color: var(--text); }
+.eyebrow { color: var(--text-2); }
+.field-label { color: var(--text-2); }
+.ui-input, input:not([type="checkbox"]):not([type="file"]), select, textarea { border-color: var(--line); background: var(--surface); color: var(--text); }
+input[type="file"] { color: var(--text-2); }
+.verification-result { border-color: var(--line); background: var(--surface); color: var(--text); }
+.verification-result-match { border-color: rgb(62 230 166 / 45%); background: rgb(62 230 166 / 12%); color: var(--green); }
+.verification-result-mismatch { border-color: rgb(255 107 125 / 45%); background: rgb(255 107 125 / 12%); color: var(--red); }
+.verification-result-manual { border-color: rgb(255 196 90 / 45%); background: rgb(255 196 90 / 12%); color: var(--amber); }
+.data-table-wrap { border-color: var(--line); background: var(--surface); }
+.data-table-wrap th { background: rgb(110 160 255 / 8%); color: var(--text-2); }
+.data-table-wrap th, .data-table-wrap td { border-bottom-color: var(--line); }
+.panel:hover { border-color: var(--line); }
+input:not([type="checkbox"]):not([type="file"]):hover, select:hover, textarea:hover { border-color: var(--line); }
+.gate1-page { color: var(--text); }
+.gate1-breadcrumb { color: var(--text-2); }
+.gate1-page-heading h1 { color: var(--text); }
+.gate1-page-heading p, .gate1-section-title p { color: var(--text-2); }
+.gate1-back-link { border-color: var(--line); background: var(--surface); color: var(--cyan); }
+.gate1-back-link:hover { border-color: var(--line); background: rgb(110 160 255 / 8%); }
+.gate1-result-banner { border-color: var(--line); background: var(--surface); }
+.gate1-result-pass { border-color: rgb(62 230 166 / 45%); background: rgb(110 160 255 / 8%); }
+.gate1-result-fail { border-color: rgb(255 107 125 / 45%); background: var(--surface); }
+.gate1-result-warning { border-color: rgb(255 196 90 / 45%); background: rgb(110 160 255 / 8%); }
+.gate1-result-unavailable { border-color: var(--line); background: var(--surface); }
+.gate1-result-symbol { background: rgb(110 160 255 / 8%); color: var(--text-2); }
+.gate1-result-pass .gate1-result-symbol { background: rgb(62 230 166 / 12%); color: var(--green); }
+.gate1-result-fail .gate1-result-symbol { background: rgb(255 107 125 / 12%); color: var(--red); }
+.gate1-result-warning .gate1-result-symbol { background: rgb(255 196 90 / 12%); color: var(--amber); }
+.gate1-eyebrow, .gate1-image-badge, .gate1-job-id { color: var(--text-2); }
+.gate1-result-copy strong { color: var(--text); }
+.gate1-result-copy > span:last-child { color: var(--text-2); }
+.gate1-count { border-color: var(--line); background: var(--surface); color: var(--text-2); }
+.gate1-count-pass { border-color: rgb(62 230 166 / 45%); color: var(--green); }
+.gate1-count-warning { border-color: rgb(255 196 90 / 45%); color: var(--amber); }
+.gate1-count-fail { border-color: rgb(255 107 125 / 45%); color: var(--red); }
+.gate1-section-heading { border-bottom-color: var(--line); }
+.gate1-section-icon { border-color: var(--line); background: rgb(110 160 255 / 8%); color: var(--cyan); }
+.gate1-section-title h2 { color: var(--text); }
+.gate1-legend { color: var(--text-2); }
+.gate1-image-card { border-color: var(--line); background: var(--surface); }
+.gate1-inspection-flow { border-bottom-color: var(--line); }
+.gate1-inspection-flow li { color: var(--text-2); }
+.gate1-inspection-flow li:not(:last-child)::after { background: rgb(110 160 255 / 8%); }
+.gate1-inspection-flow li > span { border-color: var(--line); background: rgb(110 160 255 / 8%); color: var(--cyan); }
+.gate1-image-heading { border-bottom-color: var(--line); }
+.gate1-panel-index { border-color: var(--line); background: rgb(110 160 255 / 8%); color: var(--cyan); }
+.gate1-image-title h3 { color: var(--text); }
+.gate1-image-title p { color: var(--text-2); }
+.gate1-image-badge { border-color: var(--line); background: rgb(110 160 255 / 8%); color: var(--text-2); }
+.gate1-image-unavailable { color: var(--text-2); }
+.gate1-image-unavailable strong { color: var(--text-2); }
+.gate1-image-unavailable span { color: var(--text-2); }
+.gate1-image-note, .gate1-annotation-note { border-top-color: var(--line); color: var(--text-2); }
+.gate1-annotation-note { color: var(--cyan); }
+.gate1-reference-error { color: var(--amber); }
+.gate1-feature-count { border-color: var(--line); background: rgb(110 160 255 / 8%); color: var(--text-2); }
+.gate1-geometry-summary { border-top-color: var(--line); background: rgb(110 160 255 / 8%); }
+.gate1-geometry-summary > div > span { color: var(--text-2); }
+.gate1-geometry-summary > div > strong { color: var(--cyan); }
+.gate1-geometry-summary-state { border-color: var(--line); background: var(--surface); color: var(--cyan); }
+.gate1-geometry-summary-warning { background: rgb(110 160 255 / 8%); }
+.gate1-geometry-summary-warning .gate1-geometry-summary-state { border-color: rgb(255 196 90 / 45%); color: var(--amber); }
+.gate1-table th, .gate1-table td { border-bottom-color: var(--line); }
+.gate1-table thead th { background: rgb(110 160 255 / 8%); color: var(--text-2); }
+.gate1-table tbody th { color: var(--text); }
+.gate1-feature-id { color: var(--text); }
+.gate1-feature-select:not(:disabled):hover, .gate1-feature-selected { border-color: var(--line); background: rgb(110 160 255 / 8%); }
+.gate1-feature-selected .gate1-feature-id { color: var(--cyan); }
+.gate1-feature-type { color: var(--text-2); }
+.gate1-actual-value { color: var(--text); }
+.gate1-deviation { color: var(--text-2); }
+.gate1-row-fail .gate1-deviation, .gate1-row-fail .gate1-actual-value { color: var(--red); }
+.gate1-row-warning .gate1-deviation, .gate1-row-warning .gate1-actual-value { color: var(--amber); }
+.gate1-unit { color: var(--text-2); }
+.gate1-tolerance { color: var(--text-2); }
+.gate1-status { border-color: var(--line); background: rgb(110 160 255 / 8%); color: var(--text-2); }
+.gate1-status-pass { border-color: rgb(62 230 166 / 45%); background: rgb(62 230 166 / 12%); color: var(--green); }
+.gate1-status-fail { border-color: rgb(255 107 125 / 45%); background: rgb(110 160 255 / 8%); color: var(--red); }
+.gate1-status-warning { border-color: rgb(255 196 90 / 45%); background: rgb(110 160 255 / 8%); color: var(--amber); }
+.gate1-empty-row { color: var(--text-2); }
+.gate1-decision-button { border-color: var(--line); background: var(--surface); color: var(--text-2); }
+.gate1-decision-button:hover { border-color: var(--line); background: rgb(110 160 255 / 8%); }
+.gate1-decision-selected { background: rgb(110 160 255 / 8%); color: var(--cyan); }
+.gate1-decision-selected:nth-child(2) { border-color: rgb(255 107 125 / 45%); background: rgb(110 160 255 / 8%); color: var(--red); }
+.gate1-decision-selected:nth-child(3) { border-color: rgb(255 196 90 / 45%); background: rgb(110 160 255 / 8%); color: var(--amber); }
+.gate1-form-field > span { color: var(--cyan); }
+.gate1-form-field b, .gate1-form-field small { color: var(--text-2); }
+.gate1-form-field input, .gate1-form-field textarea { border-color: var(--line); background: var(--surface); color: var(--text); }
+.gate1-submit-row { border-top-color: var(--line); }
+.gate1-submit-row p { color: var(--text-2); }
+.gate1-submit-error, .gate1-reference-error { color: var(--red); }
+.gate1-state-message { border-color: var(--line); background: var(--surface); color: var(--text-2); }
+.gate1-state-message strong { color: var(--text); }
+.gate1-state-error { border-color: rgb(255 107 125 / 45%); }
+.rca-panel { border-color: var(--line); background: var(--surface); }
+.rca-badge { background: rgb(110 160 255 / 8%); color: var(--cyan); }
+.rca-hint { color: var(--text-2); }
+.rca-error { color: var(--red); }
+.rca-warn { background: rgb(255 196 90 / 12%); color: var(--amber); }
+.rca-result h4 { color: var(--text); }
+.rca-result p, .rca-result ul { color: var(--text); }

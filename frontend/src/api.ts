@@ -74,6 +74,12 @@ export const jobsApi = {
     api.get(`/jobs/${jobId}/images/${imageId}`, { responseType: 'blob' }),
 }
 
+export const demoApi = {
+  samples: () => api.get<{ name: string; has_defect: boolean }[]>('/demo/samples'),
+  sample: (name: string) =>
+    api.get<Blob>(`/demo/samples/${encodeURIComponent(name)}`, { responseType: 'blob' }),
+}
+
 export const partsApi = {
   list: () => api.get<any[]>('/parts'),
   references: (partNumber: string) =>
@@ -88,6 +94,13 @@ export const partsApi = {
     form.append('cad_image', cadImage)
     form.append('reference_image', referenceImage)
     return api.put(`/parts/${encodeURIComponent(partNumber)}/references`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  liveDetect: (image: Blob) => {
+    const form = new FormData()
+    form.append('image', image, 'frame.jpg')
+    return api.post<LiveDetection>('/parts/live-detect', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
@@ -115,6 +128,8 @@ export const reportsApi = {
   get: (jobId: string) => api.get<any>(`/reports/${jobId}`),
   downloadUrl: (jobId: string, fmt: 'pdf' | 'xlsx' | 'docx') =>
     `/api/v1/reports/${jobId}/download?fmt=${fmt}`,
+  rcaUrl: (jobId: string, fmt: 'docx' | 'pdf' | 'md') =>
+    `/api/v1/reports/${jobId}/rca?fmt=${fmt}`,
 }
 
 export const dashboardApi = {
@@ -129,4 +144,56 @@ export const kbApi = {
 export const actionsApi = {
   list: (jobId?: string) => api.get<any[]>(`/actions${jobId ? `?job_id=${jobId}` : ''}`),
   update: (actionId: string, data: any) => api.patch(`/actions/${actionId}`, data),
+}
+
+export interface LiveDefect {
+  defect_id: string
+  defect_type: string
+  confidence: number
+  bbox: { x1: number; y1: number; x2: number; y2: number }
+  polygon: number[][]
+  note?: string | null
+}
+
+export interface LiveDetection {
+  width: number
+  height: number
+  mock: boolean
+  defects: LiveDefect[]
+}
+
+export interface RcaResult {
+  rca_id: string
+  model: string
+  ai_used: boolean
+  flags: string[]
+  root_cause: {
+    cause: string
+    effect: string
+    rationale: string
+    corrective_actions: string[]
+    preventive_actions: string[]
+    precautions: string[]
+    verification?: string | null
+    confidence?: number | null
+    citations: string[]
+    model_version?: string | null
+  }
+  top3: any[]
+  evidence: { chunk_id: string; text_excerpt?: string }[]
+  documents: Record<string, string>
+}
+
+export interface RcaStatus {
+  provider: string
+  model: string | null
+  gemini_key_configured: boolean
+  ai_enabled: boolean
+}
+
+export const rcaApi = {
+  status: () => api.get<RcaStatus>('/rca/status'),
+  analyze: (payload: { defects: { defect_type: string; confidence: number; note?: string | null }[]; measurements?: any[] }) =>
+    api.post<RcaResult>('/rca/analyze', payload, { timeout: 120000 }),
+  download: (url: string) => api.get(url.replace('/api/v1', ''), { responseType: 'blob' }),
 }

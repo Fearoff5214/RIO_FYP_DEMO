@@ -4,6 +4,13 @@ from __future__ import annotations
 from functools import lru_cache
 
 
+def _sigmoid(x: float) -> float:
+    """Cross-encoder logits -> relevance in 0..1."""
+    import math
+
+    return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, x))))
+
+
 @lru_cache(maxsize=1)
 def _get_reranker():
     try:
@@ -38,7 +45,7 @@ async def rerank_chunks(
         scores = await loop.run_in_executor(None, lambda: reranker.predict(pairs))
 
         reranked = sorted(
-            [{**c, "score": float(s)} for c, s in zip(chunks, scores)],
+            [{**c, "score": _sigmoid(float(s))} for c, s in zip(chunks, scores)],
             key=lambda x: x["score"],
             reverse=True,
         )
