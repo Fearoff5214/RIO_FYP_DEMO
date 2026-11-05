@@ -2,11 +2,33 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from app.core.logging import get_logger
 from app.workflow.state import InspectionState
 
 logger = get_logger(__name__)
+
+
+def _evidence_images(state: InspectionState, defects: list) -> list[dict]:
+    """Annotated picture of the inspected part (first captured image), for the report. [] if there is none."""
+    import cv2
+
+    from app.reports.evidence import render_frame_evidence
+
+    uri = next((i.get("uri") for i in (state.get("images") or []) if i.get("uri")), None) or next(iter(state.get("image_uris") or []), None)
+    if not uri:
+        return []
+    try:
+        frame = cv2.imread(str(uri))
+        if frame is None:
+            return []
+        out = render_frame_evidence(frame, defects, Path("tmp/evidence") / f"{state.get('job_id', 'job')}.png")
+    except Exception as exc:                                         # the report must not fail because of the picture
+        logger.warning('"node":"compose_report","evidence_image_error":"%s"', str(exc)[:200])
+        return []
+    caption = f"Part with {len(defects)} defect(s) marked" if defects else "Good part: no defect found"
+    return [{"path": str(out), "caption": caption}]
 
 
 async def compose_report(state: InspectionState) -> dict:
@@ -44,6 +66,7 @@ async def compose_report(state: InspectionState) -> dict:
             "ranked": state.get("top3", []) or [],
             "evidence": (state.get("evidence_pack", {}) or {}).get("sources", []),
         },
+        "evidence_images": _evidence_images(state, defects),
         "flags": state.get("flags", []),
         "gate1_reviewer": gate1.get("reviewer_id"),
         "gate2_reviewer": gate2.get("reviewer_id") if not fast_path else None,
@@ -80,7 +103,7 @@ async def render_files(state: InspectionState) -> dict:
     logger.info('"node":"render_files","job_id":"%s"', job_id)
 
     uris = await render_report(report)
-    if report.get("root_cause"):
+    if report.get("root_cause") or report.get("report_type") == "OK":      # a good part gets a "no defect found" document
         from app.reports.rca_document import render_rca_documents
 
         try:

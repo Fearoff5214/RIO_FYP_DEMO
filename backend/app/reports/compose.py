@@ -5,6 +5,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 
+from app.reports.evidence import NO_PICTURE_TEXT, report_images
+
 REPORTS_DIR = Path("tmp/reports")
 
 
@@ -67,6 +69,20 @@ async def _render_pdf(report: dict, job_id: str) -> Path:
             ("FONTSIZE", (0, 0), (-1, -1), 9),
         ]))
         story.append(t)
+        story.append(Spacer(1, 12))
+
+        # Picture of the part (defects marked, or the good part)
+        from reportlab.lib.utils import ImageReader
+        from reportlab.platypus import Image as PdfImage
+
+        story.append(Paragraph("Inspected Part", styles["Heading2"]))
+        pictures = report_images(report)
+        for img in pictures:
+            iw, ih = ImageReader(img["path"]).getSize()
+            story.append(PdfImage(img["path"], width=420, height=420 * ih / iw))
+            story.append(Paragraph(f"<i>{img.get('caption', '')}</i>", styles["Normal"]))
+        if not pictures:
+            story.append(Paragraph(f"<i>{NO_PICTURE_TEXT}</i>", styles["Normal"]))
         story.append(Spacer(1, 12))
 
         # Inspection summary
@@ -166,6 +182,15 @@ async def _render_xlsx(report: dict, job_id: str) -> Path:
         ws_sum.append(["Date", report.get("generated_at", "")[:10]])
         ws_sum.append(["Dimensional", summary.get("dimensional", "")])
         ws_sum.append(["Defect Detection", summary.get("defect_detection", "")])
+        pictures = report_images(report)
+        if pictures:
+            from openpyxl.drawing.image import Image as XlImage
+
+            xl_img = XlImage(pictures[0]["path"])
+            xl_img.width, xl_img.height = 480, 480 * xl_img.height / xl_img.width
+            ws_sum.add_image(xl_img, "A10")
+        else:
+            ws_sum.append([NO_PICTURE_TEXT])
 
         # Dimensions sheet
         ws_dim = wb.create_sheet("Dimensions")
@@ -241,6 +266,16 @@ async def _render_docx(report: dict, job_id: str) -> Path:
             row = table.add_row().cells
             row[0].text = k
             row[1].text = str(v)
+
+        from docx.shared import Cm
+
+        doc.add_heading("Inspected Part", level=1)
+        pictures = report_images(report)
+        for img in pictures:
+            doc.add_picture(img["path"], width=Cm(15))
+            doc.add_paragraph().add_run(img.get("caption", "")).italic = True
+        if not pictures:
+            doc.add_paragraph().add_run(NO_PICTURE_TEXT).italic = True
 
         summary = report.get("inspection_summary", {})
         doc.add_heading("Inspection Summary", level=1)

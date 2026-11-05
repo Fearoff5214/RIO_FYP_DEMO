@@ -200,8 +200,31 @@ export default function NewJob() {
 
   const analyseDefects = captureDetection?.defects.length ? captureDetection.defects : (liveDetection?.defects ?? [])
 
+  const [rcaImage, setRcaImage] = useState('')
+  const scanInputRef = useRef<HTMLInputElement>(null)
+
+  const showRcaResult = async (result: RcaResult) => {
+    setRcaResult(result)
+    setRcaImage('')
+    if (result.image_url) {
+      try {
+        setRcaImage(URL.createObjectURL((await rcaApi.image(result.image_url)).data))
+      } catch {
+        setRcaImage('')
+      }
+    }
+  }
+
+  const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+
+  // A captured frame with no defects still produces a report: the good part and a "no defect found" result.
   const analyseRootCause = async () => {
-    if (!analyseDefects.length) return
+    if (!analyseDefects.length && !capturedImage) return
     setRcaLoading(true)
     setRcaError('')
     try {
@@ -210,12 +233,28 @@ export default function NewJob() {
           defect_type: defect.defect_type,
           confidence: defect.confidence,
           note: defect.note ?? null,
+          bbox: defect.bbox,
+          polygon: defect.polygon,
         })),
+        evidence_image: capturedImage ? await blobToDataUrl(capturedImage) : undefined,
       })
-      setRcaResult(response.data)
+      await showRcaResult(response.data)
     } catch (analysisError) {
       setRcaResult(null)
       setRcaError(errorMessage(analysisError, 'Root cause analysis failed.'))
+    } finally {
+      setRcaLoading(false)
+    }
+  }
+
+  const analysePointCloud = async (file: File) => {
+    setRcaLoading(true)
+    setRcaError('')
+    try {
+      await showRcaResult((await rcaApi.pointcloud(file)).data)
+    } catch (scanError) {
+      setRcaResult(null)
+      setRcaError(errorMessage(scanError, 'Point cloud inspection failed.'))
     } finally {
       setRcaLoading(false)
     }
@@ -683,25 +722,41 @@ export default function NewJob() {
               <p className="rca-hint">
                 {analyseDefects.length
                   ? `${analyseDefects.length} defect${analyseDefects.length === 1 ? '' : 's'} detected. Analyse them to get the cause, the reason and the solution as a document.`
-                  : 'Capture a frame (or mark defects live) so there are detected defects to analyse.'}
+                  : capturedImage
+                    ? 'No defect detected in the captured frame. Create the report to record the good part.'
+                    : 'Capture a frame (or mark defects live), or upload a 3D point-cloud scan, to create a report.'}
               </p>
-              <button type="button" onClick={analyseRootCause} disabled={!analyseDefects.length || rcaLoading} className="btn-primary">
-                {rcaLoading ? <LoaderCircle size={14} className="animate-spin" /> : <ScanLine size={14} />} Analyse root cause (AI)
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={analyseRootCause} disabled={(!analyseDefects.length && !capturedImage) || rcaLoading} className="btn-primary">
+                  {rcaLoading ? <LoaderCircle size={14} className="animate-spin" /> : <ScanLine size={14} />} {analyseDefects.length || !capturedImage ? 'Analyse root cause (AI)' : 'Create good-part report'}
+                </button>
+                <input ref={scanInputRef} type="file" accept=".ply,.pcd,.xyz,.pts,.csv,.txt,.npy" hidden
+                  onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) analysePointCloud(file) }} />
+                <button type="button" onClick={() => scanInputRef.current?.click()} disabled={rcaLoading} className="btn-secondary">
+                  <Upload size={14} /> Inspect point cloud (3D scan)
+                </button>
+              </div>
               {rcaError && <p className="rca-error">{rcaError}</p>}
               {rcaResult && (
                 <div className="rca-result">
-                  {!rcaResult.ai_used && (
+                  {rcaImage && <img src={rcaImage} alt="Inspected part" className="mb-2 w-full rounded-lg border border-slate-200" />}
+                  {rcaResult.root_cause && !rcaResult.ai_used && (
                     <p className="rca-warn">The AI model was not used ({rcaResult.model}). This is the offline template, not an analysis. Add GEMINI_API_KEY to .env and restart the API.</p>
                   )}
-                  <h4>Cause</h4>
-                  <p>{rcaResult.root_cause.cause}{rcaResult.root_cause.confidence != null ? ` (${Math.round(rcaResult.root_cause.confidence * 100)}%)` : ''}</p>
-                  <h4>Reason</h4>
-                  <p>{rcaResult.root_cause.rationale}</p>
-                  <h4>Solution</h4>
-                  <ul>{rcaResult.root_cause.corrective_actions.map((action, index) => <li key={`c${index}`}>{action}</li>)}</ul>
-                  <h4>Prevention</h4>
-                  <ul>{rcaResult.root_cause.preventive_actions.map((action, index) => <li key={`p${index}`}>{action}</li>)}</ul>
+                  {!rcaResult.root_cause ? (
+                    <p><strong>No defect found.</strong> The part conforms to the drawing within tolerance. A report with the picture of the good part is ready to download.</p>
+                  ) : (
+                    <>
+                      <h4>Cause</h4>
+                      <p>{rcaResult.root_cause.cause}{rcaResult.root_cause.confidence != null ? ` (${Math.round(rcaResult.root_cause.confidence * 100)}%)` : ''}</p>
+                      <h4>Reason</h4>
+                      <p>{rcaResult.root_cause.rationale}</p>
+                      <h4>Solution</h4>
+                      <ul>{rcaResult.root_cause.corrective_actions.map((action, index) => <li key={`c${index}`}>{action}</li>)}</ul>
+                      <h4>Prevention</h4>
+                      <ul>{rcaResult.root_cause.preventive_actions.map((action, index) => <li key={`p${index}`}>{action}</li>)}</ul>
+                    </>
+                  )}
                   <div className="rca-downloads">
                     {Object.keys(rcaResult.documents).map((format) => (
                       <button key={format} type="button" className="btn-secondary" onClick={() => downloadRca(format)}>

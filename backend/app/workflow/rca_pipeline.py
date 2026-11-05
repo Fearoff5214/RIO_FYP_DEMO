@@ -17,7 +17,10 @@ async def _apply(state: dict, step, **kwargs) -> None:
 
 
 async def run_rca(state: dict, db=None) -> dict:
-    """Run the analysis on `state` (part_master, defects, measurements) and return the updated state."""
+    """Run the analysis on `state` (part_master, defects, measurements) and return the updated state.
+    A part with no defects has nothing to analyse: the state is returned unchanged (a "no defect" report)."""
+    if not state.get("defects"):
+        return state
     state.setdefault("loops", {})
     state.setdefault("flags", [])
     for d in state.get("defects", []):
@@ -55,13 +58,16 @@ def build_report(state: dict) -> dict:
 
     top3 = state.get("top3", []) or []
     primary = top3[0] if top3 else {}
+    defects = state.get("defects", [])
     return {
+        "evidence_images": state.get("evidence_images") or [],
+        "verdict": "DEFECT" if defects else "NO_DEFECT",
         "job_id": state.get("job_id", ""),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "part": {k: (state.get("part_master") or {}).get(k, "") for k in ("part_number", "part_name", "drawing_rev", "material", "process")},
-        "defects": state.get("defects", []),
+        "defects": defects,
         "measurements": state.get("measurements", []),
-        "root_cause": {
+        "root_cause": None if not defects else {
             "cause": primary.get("cause", ""),
             "effect": primary.get("effect", ""),
             "rationale": primary.get("rationale", ""),
@@ -74,5 +80,5 @@ def build_report(state: dict) -> dict:
             "model_version": primary.get("model_version"),
             "edited": False,
         },
-        "rca": {"ranked": top3, "evidence": (state.get("evidence_pack") or {}).get("sources", [])},
+        "rca": None if not defects else {"ranked": top3, "evidence": (state.get("evidence_pack") or {}).get("sources", [])},
     }

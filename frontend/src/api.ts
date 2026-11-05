@@ -164,10 +164,13 @@ export interface LiveDetection {
 
 export interface RcaResult {
   rca_id: string
+  status: 'DEFECT' | 'NO_DEFECT'
+  image_url: string | null
+  scan?: { points: number; spacing_mm: number }
   model: string
   ai_used: boolean
   flags: string[]
-  root_cause: {
+  root_cause: null | {
     cause: string
     effect: string
     rationale: string
@@ -193,7 +196,16 @@ export interface RcaStatus {
 
 export const rcaApi = {
   status: () => api.get<RcaStatus>('/rca/status'),
-  analyze: (payload: { defects: { defect_type: string; confidence: number; note?: string | null }[]; measurements?: any[] }) =>
-    api.post<RcaResult>('/rca/analyze', payload, { timeout: 120000 }),
+  analyze: (payload: {
+    defects: { defect_type: string; confidence: number; note?: string | null; bbox?: LiveDefect['bbox']; polygon?: number[][] }[]
+    measurements?: any[]
+    evidence_image?: string
+  }) => api.post<RcaResult>('/rca/analyze', payload, { timeout: 120000 }),
+  pointcloud: (scan: File) => {
+    const form = new FormData()
+    form.append('scan', scan)
+    return api.post<RcaResult>('/rca/pointcloud', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 })
+  },
+  image: (url: string) => api.get(url.replace('/api/v1', ''), { responseType: 'blob' }),
   download: (url: string) => api.get(url.replace('/api/v1', ''), { responseType: 'blob' }),
 }

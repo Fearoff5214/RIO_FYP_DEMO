@@ -7,7 +7,11 @@ Input is the report dict built by workflow stage 7 (`compose_report`) or by the 
               root_cause{cause, effect, rationale, corrective_actions, preventive_actions,
                          precautions, verification, confidence, citations, model_version,
                          edited, reviewer_id, finalized_at, status},
-              rca{ranked[], evidence[]}}
+              rca{ranked[], evidence[]},
+              evidence_images[{path, caption}]}      # picture(s) of the part, embedded in the document
+
+A part with no defects and no root cause gets a short "no defect found" report: the picture of the
+good part and the measurements that were checked.
 
 Writes DOCX, PDF and Markdown next to the other reports and returns their paths.
 """
@@ -30,6 +34,16 @@ def _pct(value) -> str:
         return "n/a"
 
 
+NO_DEFECT_TEXT = "No defect found. The part conforms to the drawing within tolerance."
+
+
+def _images(report: dict) -> list[dict]:
+    """Evidence pictures that exist on disk (logged when there are none)."""
+    from app.reports.evidence import report_images
+
+    return report_images(report)
+
+
 def build_view(report: dict) -> dict:
     """Flatten the report into the fields the document needs (tolerates missing data)."""
     rc = report.get("root_cause") or {}
@@ -45,7 +59,13 @@ def build_view(report: dict) -> dict:
         status = "Reviewed by expert" + (f" ({rc.get('reviewer_id')})" if rc.get("reviewer_id") else "")
     else:
         status = "AI proposal, pending expert review"
+    clean = not (report.get("defects") or []) and not rc.get("cause")
+    if clean:
+        status = "Inspection passed, no defect"
     return {
+        "clean": clean,
+        "images": _images(report),
+        "measurements": report.get("measurements") or [],
         "job_id": report.get("job_id", ""),
         "generated_at": (report.get("generated_at") or datetime.now(timezone.utc).isoformat())[:19].replace("T", " "),
         "part": report.get("part") or {},
@@ -72,6 +92,33 @@ def _safe(text) -> str:
     return "" if text is None else str(text)
 
 
+DISCLAIMER_CLEAN = "Automated inspection result. A quality inspector should confirm it before the part is released."
+
+
+def _meas_rows(v: dict) -> list[list]:
+    return [[m.get("feature_id", ""), m.get("nominal", ""), m.get("actual", ""),
+             f"±{m['tolerance']}" if m.get("tolerance") is not None else "", "OK" if m.get("within_tolerance", True) else "OUT"]
+            for m in v["measurements"]]
+
+
+def _md_pictures(v: dict) -> list[str]:
+    from app.reports.evidence import NO_PICTURE_TEXT
+
+    if not v["images"]:
+        return [f"*{NO_PICTURE_TEXT}*", ""]
+    out = []
+    for img in v["images"]:
+        out += [f"![{img.get('caption', 'Part')}]({Path(img['path']).name})", "", f"*{img.get('caption', '')}*", ""]
+    return out
+
+
+def _md_measurements(v: dict) -> list[str]:
+    rows = _meas_rows(v)
+    if not rows:
+        return []
+    return ["| Feature | Nominal | Actual | Tolerance | Result |", "|---|---|---|---|---|"] +            [f"| {' | '.join(str(c) for c in r)} |" for r in rows]
+
+
 # ---- Markdown -----------------------------------------------------------------------------
 def to_markdown(v: dict) -> str:
     part = v["part"]
@@ -80,8 +127,16 @@ def to_markdown(v: dict) -> str:
            f"**Material / process:** {part.get('material', '')} / {part.get('process', '')}  ",
            f"**Case:** {v['job_id']}  **Date:** {v['generated_at']}  ",
            f"**Status:** {v['status']}", ""]
+    if v["clean"]:
+        out += [f"**Result: NO DEFECT FOUND.** {NO_DEFECT_TEXT}", ""]
+        out += _md_pictures(v)
+        out += ["## 1. Inspection result", ""]
+        out += _md_measurements(v) or ["No measurements were recorded."]
+        out += ["", "## 2. Traceability", "", f"- {DISCLAIMER_CLEAN}", ""]
+        return "\n".join(out)
     if v["fallback"]:
         out += [f"> **Warning:** the AI model was not used for this analysis ({v['model']}). The text below is a generic offline template, not a result.", ""]
+    out += _md_pictures(v)
     out += ["## 1. Problem", ""]
     if v["defects"]:
         out += ["| Defect | Severity | Confidence | Detail |", "|---|---|---|---|"]
@@ -161,12 +216,42 @@ def to_docx(v: dict, path: Path) -> None:
     table([["Part", f"{part.get('part_number', '')} {part.get('part_name', '')}".strip()],
            ["Material / process", f"{part.get('material', '')} / {part.get('process', '')}"],
            ["Case", v["job_id"]], ["Date", v["generated_at"]], ["Status", v["status"]]], [4.0, 13.0], head="FFFFFF")
+    def pictures():
+        if not v["images"]:
+            from app.reports.evidence import NO_PICTURE_TEXT
+
+            doc.add_paragraph().add_run(NO_PICTURE_TEXT).italic = True
+        for img in v["images"]:
+            doc.add_picture(img["path"], width=Cm(16.5))
+            cap = doc.add_paragraph()
+            cap.add_run(img.get("caption", "")).italic = True
+
+    if v["clean"]:
+        p = doc.add_paragraph()
+        r = p.add_run("RESULT: NO DEFECT FOUND. " + NO_DEFECT_TEXT)
+        r.bold = True
+        r.font.color.rgb = RGBColor(0x15, 0x80, 0x3D)
+        pictures()
+        doc.add_heading("1. Inspection result", 1)
+        rows = _meas_rows(v)
+        if rows:
+            table([["Feature", "Nominal", "Actual", "Tolerance", "Result"]] + rows, [6.0, 2.5, 2.5, 3.0, 3.0])
+        else:
+            doc.add_paragraph("No measurements were recorded.")
+        doc.add_heading("2. Traceability", 1)
+        note = doc.add_paragraph()
+        r = note.add_run(DISCLAIMER_CLEAN)
+        r.italic = True
+        r.font.size = Pt(9)
+        doc.save(str(path))
+        return
     if v["fallback"]:
         p = doc.add_paragraph()
         r = p.add_run(f"WARNING: the AI model was not used for this analysis ({v['model']}). "
                       "The text below is a generic offline template, not a result.")
         r.bold = True
         r.font.color.rgb = RGBColor(0xB0, 0x1E, 0x2E)
+    pictures()
 
     doc.add_heading("1. Problem", 1)
     if v["defects"]:
@@ -236,7 +321,8 @@ def to_pdf(v: dict, path: Path) -> None:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.lib.utils import ImageReader
+    from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     styles = getSampleStyleSheet()
     cell = styles["Normal"].clone("cell", fontSize=8.5, leading=10.5)
@@ -253,8 +339,31 @@ def to_pdf(v: dict, path: Path) -> None:
     story += [tbl([["Part", f"{part.get('part_number', '')} {part.get('part_name', '')}"],
                    ["Material / process", f"{part.get('material', '')} / {part.get('process', '')}"],
                    ["Case", v["job_id"]], ["Date", v["generated_at"]], ["Status", v["status"]]], [110, 360], colors.white), Spacer(1, 8)]
+    def pictures():
+        if not v["images"]:
+            from app.reports.evidence import NO_PICTURE_TEXT
+
+            story.append(Paragraph(f"<i>{_pdf_text(NO_PICTURE_TEXT)}</i>", cell))
+        for img in v["images"]:
+            iw, ih = ImageReader(img["path"]).getSize()
+            width = 480
+            story.extend([Image(img["path"], width=width, height=width * ih / iw),
+                          Paragraph(f"<i>{_pdf_text(img.get('caption', ''))}</i>", cell), Spacer(1, 8)])
+
+    if v["clean"]:
+        story += [Paragraph(f"<b>RESULT: NO DEFECT FOUND.</b> {_pdf_text(NO_DEFECT_TEXT)}", styles["Normal"]), Spacer(1, 6)]
+        pictures()
+        story.append(Paragraph("1. Inspection result", styles["Heading2"]))
+        rows = _meas_rows(v)
+        story.append(tbl([["Feature", "Nominal", "Actual", "Tolerance", "Result"]] + rows, [160, 70, 70, 80, 60]) if rows
+                     else Paragraph("No measurements were recorded.", styles["Normal"]))
+        story.append(Paragraph("2. Traceability", styles["Heading2"]))
+        story.append(Paragraph(f"<i>{_pdf_text(DISCLAIMER_CLEAN)}</i>", styles["Normal"]))
+        SimpleDocTemplate(str(path), pagesize=A4, leftMargin=50, rightMargin=50, topMargin=50, bottomMargin=50).build(story)
+        return
     if v["fallback"]:
         story += [Paragraph(f"<b>WARNING:</b> {_pdf_text('the AI model was not used for this analysis (' + v['model'] + '). The text below is a generic offline template, not a result.')}", styles["Normal"]), Spacer(1, 6)]
+    pictures()
     story.append(Paragraph("1. Problem", styles["Heading2"]))
     if v["defects"]:
         story.append(tbl([["Defect", "Severity", "Confidence", "Detail"]] +
@@ -298,11 +407,25 @@ def to_pdf(v: dict, path: Path) -> None:
 
 
 # ---- entry point --------------------------------------------------------------------------
+def _stage_images(report: dict, out_dir: Path, stem: str) -> list[dict]:
+    """Copy the evidence pictures next to the documents so the Markdown link resolves."""
+    import shutil
+
+    staged = []
+    for n, img in enumerate(_images(report), 1):
+        dest = out_dir / f"{stem}_evidence{n}{Path(img['path']).suffix or '.png'}"
+        if Path(img["path"]).resolve() != dest.resolve():
+            shutil.copyfile(img["path"], dest)
+        staged.append({**img, "path": str(dest)})
+    return staged
+
+
 async def render_rca_documents(report: dict, out_dir: Path | None = None, stem: str | None = None) -> dict[str, str]:
     """Write DOCX, PDF and Markdown RCA documents; returns {docx, pdf, md} paths."""
     out_dir = Path(out_dir or REPORTS_DIR)
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = stem or f"{report.get('job_id', 'unknown')}_rca"
+    report = {**report, "evidence_images": _stage_images(report, out_dir, stem)}
     view = build_view(report)
     paths = {"docx": out_dir / f"{stem}.docx", "pdf": out_dir / f"{stem}.pdf", "md": out_dir / f"{stem}.md"}
     paths["md"].write_text(to_markdown(view), encoding="utf-8")

@@ -66,3 +66,20 @@ In mock/dev mode, auth is bypassed (dev-user/admin role injected).
   "comments": "required if reject"
 }
 ```
+
+### Root cause analysis with a picture of the part
+Every RCA document (DOCX / PDF / Markdown) embeds a picture of the part. With defects it shows them
+marked; for a good part it shows the part under a "no defect" banner and the report states
+"NO DEFECT FOUND" with the measurements that were checked (no AI call is made).
+
+- `POST /rca/analyze` JSON: `defects` (may be empty), optional `evidence_image` (base64 JPEG/PNG of the
+  part) and per-defect `bbox` / `polygon` to mark them.
+- `POST /rca/pointcloud` multipart: `scan` (PLY, ASCII PCD, XYZ/PTS/CSV or NPY; millimetres; X length,
+  Y width with the flange at Y=0, Z up; translation only, no rotation). Checks length, width, height,
+  bend angle, hole diameter/position, cracks (slot walls), dents and scratches against drawing
+  MS-4505-001. Returns the same body as `/rca/analyze` plus `scan: {points, spacing_mm}`.
+  A scan whose size is far from 120 x 80 x 50 mm is rejected with 422.
+- Response: `status` (`DEFECT` | `NO_DEFECT`), `root_cause` (null when no defect), `image_url`,
+  `documents`. `GET /rca/{rca_id}/image` serves the picture.
+
+Sample scans: `py scripts/make_bracket_pointclouds.py` writes `docs/demo/pointclouds/*.ply`.
