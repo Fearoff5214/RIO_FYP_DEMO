@@ -24,9 +24,14 @@ ANSWER = {"candidates": [
 ]}
 
 
-def cfg(key=KEY, provider=""):
+def cfg(key=KEY, provider="", fallback_model=""):
     return SimpleNamespace(
-        settings=SimpleNamespace(gemini_api_key=key, gemini_model="gemini-test", novaliseo_llm_provider=provider),
+        settings=SimpleNamespace(
+            gemini_api_key=key,
+            gemini_model="gemini-test",
+            gemini_fallback_model=fallback_model,
+            novaliseo_llm_provider=provider,
+        ),
         get=lambda *a, **k: None,
     )
 
@@ -72,6 +77,28 @@ async def test_parses_answer_and_filters_unknown_citations():
 
 
 @pytest.mark.asyncio
+async def test_tries_fallback_model_when_primary_is_unavailable():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if "gemini-test" in str(request.url):
+            return httpx.Response(404, json={"error": {"message": "model not found"}})
+        return httpx.Response(200, json=gemini_reply(ANSWER))
+
+    provider = GeminiProvider(
+        cfg(fallback_model="gemini-fallback-test"),
+        transport=httpx.MockTransport(handler),
+    )
+    out = await provider.generate_root_causes(CONTEXT, EVIDENCE)
+
+    assert len(seen) == 2
+    assert "gemini-test:generateContent" in seen[0]
+    assert "gemini-fallback-test:generateContent" in seen[1]
+    assert out[0]["model_version"] == "gemini:gemini-fallback-test"
+
+
+@pytest.mark.asyncio
 async def test_placeholder_candidates_are_dropped():
     answer = {"candidates": ANSWER["candidates"] + [{"cause": "Insufficient Evidence for Alternative Causes", "rationale": "-", "effect": "-",
                                                       "corrective_actions": [], "preventive_actions": [], "citations": ["c1"]}]}
@@ -104,8 +131,15 @@ async def test_retries_rate_limit_then_succeeds(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_http_error_falls_back_and_never_leaks_key():
-    provider = provider_with(lambda r: httpx.Response(403, json={"error": {"message": f"bad key {KEY}"}}))
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        return httpx.Response(403, json={"error": {"message": f"bad key {KEY}"}})
+
+    provider = GeminiProvider(cfg(fallback_model="gemini-fallback-test"), transport=httpx.MockTransport(handler))
     out = await provider.generate_root_causes(CONTEXT, EVIDENCE)
+    assert calls["n"] == 1                               # credentials errors cannot be fixed by another model
     assert out and all(c["model_version"].startswith("fallback-fake") for c in out)
     assert KEY not in out[0]["model_version"] and KEY not in (provider.last_error or "")
     assert "403" in provider.last_error

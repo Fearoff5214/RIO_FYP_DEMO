@@ -53,25 +53,36 @@ class GeminiProvider:
         if not key:
             return await self._fallback("GEMINI_API_KEY is not set", context, evidence, regenerate)
         try:
-            candidates, last = [], None
-            for attempt in range(2):                           # one retry if the answer cannot be parsed
-                try:
-                    text = await self._call(key, _system_prompt(), _user_message(context, evidence, regenerate or attempt > 0))
-                    candidates = _parse_candidates(text, evidence)
-                    if candidates:
+            fallback_model = (getattr(self.cfg.settings, "gemini_fallback_model", "") or "").strip()
+            models = list(dict.fromkeys(model for model in (self.model, fallback_model) if model))
+            last: Exception | None = None
+            for model in models:
+                for attempt in range(2):                       # one retry if the answer cannot be parsed
+                    try:
+                        text = await self._call(
+                            key,
+                            _system_prompt(),
+                            _user_message(context, evidence, regenerate or attempt > 0),
+                            model=model,
+                        )
+                        candidates = _parse_candidates(text, evidence)
+                        if candidates:
+                            tag = f"gemini:{model}"
+                            return [{**c, "model_version": tag} for c in candidates[:3]]
+                        last = ValueError("the model returned no usable candidates")
+                    except (json.JSONDecodeError, ValueError) as exc:
+                        last = exc
+                    except httpx.HTTPStatusError as exc:
+                        last = exc
+                        if not _can_try_next_model(exc) or model == models[-1]:
+                            raise
                         break
-                    last = ValueError("the model returned no usable candidates")
-                except (json.JSONDecodeError, ValueError) as exc:
-                    last = exc
-            if not candidates:
-                raise last or ValueError("no candidates")
-            tag = f"gemini:{self.model}"
-            return [{**c, "model_version": tag} for c in candidates[:3]]
+            raise last or ValueError("no candidates")
         except Exception as exc:                                  # noqa: BLE001 - always degrade safely
             return await self._fallback(_safe_error(exc, key), context, evidence, regenerate)
 
     # ---- internals ------------------------------------------------------------------------
-    async def _call(self, key: str, system: str, user: str) -> str:
+    async def _call(self, key: str, system: str, user: str, model: str | None = None) -> str:
         temperature = float(self.cfg.get("prediction", "llm", "temperature") or 0.2)
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
@@ -83,7 +94,7 @@ class GeminiProvider:
                 "responseSchema": RESPONSE_SCHEMA,
             },
         }
-        url = f"{API_BASE}/models/{self.model}:generateContent"
+        url = f"{API_BASE}/models/{model or self.model}:generateContent"
         headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=60.0, transport=self.transport) as client:
             last: Exception | None = None
@@ -184,3 +195,8 @@ def _safe_error(exc: Exception, key: str) -> str:
         return f"HTTP {code}: {hint}"
     text = f"{type(exc).__name__}: {exc}"
     return text.replace(key, "***")[:160]
+
+
+def _can_try_next_model(exc: httpx.HTTPStatusError) -> bool:
+    """Model availability and quota can differ, while credential errors affect every model."""
+    return exc.response.status_code in {404, 429}

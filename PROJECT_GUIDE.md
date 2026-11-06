@@ -395,6 +395,7 @@ offline template.
    ```
    GEMINI_API_KEY=your-key-here
    GEMINI_MODEL=gemini-3.1-flash-lite
+   GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
    ```
 
 3. Check it: `py scripts\check_gemini.py` (lists the models your key can call and
@@ -413,6 +414,8 @@ depends on `NOVALISEO_MODE`. Tests always use the fake provider.
 - `gemini-3.1-flash-lite` is the default because it is kind to the free tier. `gemini-3.5-flash` gives
   better quality but the free tier allows only a small number of requests per day **per model**; the
   limit was used up during testing and resets after about 14 hours.
+- If the primary model is unavailable, rate-limited, or returns unusable output, RCA tries
+  `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`). The key must be permitted to use both models.
 - A daily-quota 429 is not retried; the result falls back to the offline template and says
   "daily free-tier quota used up for this model". Change `GEMINI_MODEL` or enable billing.
 

@@ -1,12 +1,20 @@
-import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import {
+  Activity,
   ArrowUpRight,
   BookOpen,
   Boxes,
   ClipboardList,
+  FolderOpen,
+  Plus,
   LayoutDashboard,
+  Moon,
   ScanLine,
   Settings2,
+  Sun,
+  UserRound,
   type LucideIcon,
 } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
@@ -20,6 +28,8 @@ import Reports from './pages/Reports'
 import KnowledgeBase from './pages/KnowledgeBase'
 import Actions from './pages/Actions'
 import NewJob from './pages/NewJob'
+import EngineeringAssistant from './components/EngineeringAssistant'
+import { jobsApi } from './api'
 
 type NavigationItem = {
   to: string
@@ -38,6 +48,8 @@ const operationsNavigation: NavigationItem[] = [
   { to: '/actions', label: 'Corrective actions', icon: Settings2 },
   { to: '/kb', label: 'Knowledge base', icon: BookOpen },
 ]
+
+const workflowSteps = ['Verify', 'Measure', 'Detect', 'Diagnose', 'Report']
 
 const routeTitles: Record<string, string> = {
   '/': 'Overview',
@@ -75,39 +87,88 @@ function SidebarLink({ item }: { item: NavigationItem }) {
 export default function App() {
   const location = useLocation()
   const title = currentTitle(location.pathname)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => (
+    localStorage.getItem('novaliseo-theme') === 'dark' ? 'dark' : 'light'
+  ))
+  const jobId = location.pathname.match(/^\/jobs\/([^/]+)/)?.[1]
+  const { data: activeJob } = useQuery({
+    queryKey: ['job', jobId],
+    queryFn: () => jobsApi.get(jobId!).then((response) => response.data as { status?: string }),
+    enabled: Boolean(jobId && jobId !== 'new'),
+    refetchInterval: 5_000,
+  })
+  const activeStep = location.pathname.includes('/gate1') ? 1
+    : location.pathname.includes('/label') ? 2
+      : location.pathname.includes('/gate2') ? 3
+        : location.pathname.includes('/gate3') || location.pathname.includes('/reports') ? 4
+          : location.pathname === '/jobs/new' ? 0
+            : -1
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('novaliseo-theme', theme)
+  }, [theme])
 
   return (
     <div className="app-shell">
-      <aside className="app-sidebar">
-        <NavLink to="/" className="brand-lockup" aria-label="Novaliseo overview">
-          <div className="brand-mark"><Boxes size={21} strokeWidth={1.8} /></div>
-          <div>
+      <header className="app-topbar">
+        <Link to="/" className="brand-lockup" aria-label="Novaliseo overview">
+          <div className="brand-mark"><Boxes size={20} strokeWidth={1.8} /></div>
+          <div className="brand-copy">
             <div className="brand-name">NOVALISEO</div>
             <div className="brand-caption">QUALITY INTELLIGENCE</div>
           </div>
-        </NavLink>
+        </Link>
 
-        <div className="sidebar-section-label">WORKSPACE</div>
+        <nav className="workflow-nav" aria-label="Inspection workflow">
+          {workflowSteps.map((step, index) => {
+            const target = index === 0 ? '/jobs/new'
+              : jobId && jobId !== 'new'
+                ? [`/jobs/${jobId}/gate1`, `/jobs/${jobId}/label`, `/jobs/${jobId}/gate2`, `/jobs/${jobId}/reports`][index - 1]
+                : '/jobs'
+            return (
+              <div key={step} className={`workflow-nav-step${activeStep === index ? ' workflow-nav-step-active' : ''}${activeStep > index ? ' workflow-nav-step-done' : ''}`}>
+                <Link to={target} aria-current={activeStep === index ? 'step' : undefined}>
+                  <span className="workflow-nav-number">{index + 1}</span>
+                  <span className="workflow-nav-copy"><strong>{step}</strong><small>{['Part setup', 'Dimensional', 'Detection', 'Root cause', 'Approval'][index]}</small></span>
+                </Link>
+                {index < workflowSteps.length - 1 && <span className="workflow-nav-arrow" aria-hidden="true">›</span>}
+              </div>
+            )
+          })}
+        </nav>
+
+        <div className="topbar-actions">
+          <Link to="/jobs/new" className="topbar-action topbar-action-primary"><Plus size={14} /> New</Link>
+          <Link to="/jobs" className="topbar-action"><FolderOpen size={14} /> Open</Link>
+          <button
+            type="button"
+            className="topbar-icon-button"
+            onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          >
+            {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+          </button>
+          <Link to="/kb" className="topbar-icon-button" title="Help and knowledge base" aria-label="Help and knowledge base"><BookOpen size={16} /></Link>
+          <span className="topbar-user"><UserRound size={15} /><span>Quality Engineer</span></span>
+        </div>
+      </header>
+
+      <aside className="app-sidebar">
+        <div className="sidebar-section-label">PROJECT / ANALYSIS</div>
         <nav className="sidebar-nav" aria-label="Workspace navigation">
           {primaryNavigation.map((item) => <SidebarLink key={item.to} item={item} />)}
         </nav>
 
-        <div className="sidebar-section-label sidebar-section-spaced">OPERATIONS</div>
+        <div className="sidebar-section-label sidebar-section-spaced">QUALITY TOOLS</div>
         <nav className="sidebar-nav" aria-label="Operations navigation">
           {operationsNavigation.map((item) => <SidebarLink key={item.to} item={item} />)}
         </nav>
-
+        <div className="sidebar-live-state"><span className="sidebar-live-dot" /><span>WORKSPACE</span><strong>READY</strong></div>
       </aside>
 
       <div className="app-main">
-        <header className="app-topbar">
-          <div className="topbar-context">
-            <span className="topbar-eyebrow">MANUFACTURING QUALITY</span>
-            <span className="topbar-divider">/</span>
-            <span className="topbar-title">{title}</span>
-          </div>
-        </header>
-
         <main className="app-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -123,10 +184,16 @@ export default function App() {
             <Route path="/kb" element={<KnowledgeBase />} />
           </Routes>
         </main>
-        <footer className="app-footer">
-          <span>Novaliseo</span>
-        </footer>
       </div>
+
+      <EngineeringAssistant jobId={jobId && jobId !== 'new' ? jobId : undefined} pathname={location.pathname} />
+
+      <footer className="app-footer">
+        <span className="footer-ready"><span className="sidebar-live-dot" /> UI READY</span>
+        <span>Workspace: {title}</span>
+        <span>{jobId && jobId !== 'new' ? `Job ${jobId.slice(0, 8).toUpperCase()} · ${activeJob?.status?.replace(/_/g, ' ') ?? 'STATUS UNAVAILABLE'}` : 'No active inspection'}</span>
+        <span><Activity size={12} /> Novaliseo Quality Intelligence</span>
+      </footer>
     </div>
   )
 }

@@ -166,16 +166,18 @@ export default function NewJob() {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('Camera access is not available. Use localhost or HTTPS and allow camera permission in the browser.')
     }
-    if (simulationRef.current !== null) window.clearInterval(simulationRef.current)
-    simulationRef.current = null
-    streamRef.current?.getTracks().forEach((track) => track.stop())
     const stream = await navigator.mediaDevices.getUserMedia({
       video: deviceId ? { deviceId: { exact: deviceId } } : true,
       audio: false,
     })
+    if (simulationRef.current !== null) window.clearInterval(simulationRef.current)
+    simulationRef.current = null
+    const previousStream = streamRef.current
     streamRef.current = stream
+    if (videoRef.current) videoRef.current.srcObject = stream
+    previousStream?.getTracks().forEach((track) => track.stop())
     frameIndexRef.current = -1
-    setSelectedDevice(deviceId ?? stream.getVideoTracks()[0]?.getSettings().deviceId ?? '')
+    setSelectedDevice(stream.getVideoTracks()[0]?.getSettings().deviceId ?? deviceId ?? '')
     setCameraSource('live')
     setCameraActive(true)
   }, [])
@@ -184,13 +186,25 @@ export default function NewJob() {
     setError('')
     try {
       await attachLiveCamera()
-      const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput')
-      setCameraDevices(devices)
-      const iriun = devices.find((device) => /iriun/i.test(device.label))
-      if (iriun) await attachLiveCamera(iriun.deviceId)
     } catch (cameraError) {
       setError(errorMessage(cameraError, 'Could not connect to a camera. Check that a camera is attached and that the browser has permission to use it.'))
       setCameraActive(false)
+      return
+    }
+
+    try {
+      const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput')
+      setCameraDevices(devices)
+      const iriun = devices.find((device) => /iriun/i.test(device.label))
+      if (iriun) {
+        try {
+          await attachLiveCamera(iriun.deviceId)
+        } catch (cameraError) {
+          setError(errorMessage(cameraError, 'Could not switch to Iriun Webcam. The current camera remains connected.'))
+        }
+      }
+    } catch (cameraError) {
+      setError(errorMessage(cameraError, 'Camera connected, but the camera list could not be loaded.'))
     }
   }
 

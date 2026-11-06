@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     gemini_api_key: str = ""            # env GEMINI_API_KEY (Google AI Studio key)
     gemini_model: str = "gemini-3.1-flash-lite"   # env GEMINI_MODEL; use any model your key can call
+    gemini_fallback_model: str = "gemini-3.5-flash-lite"  # env GEMINI_FALLBACK_MODEL
     novaliseo_llm_provider: str = ""    # env NOVALISEO_LLM_PROVIDER: auto | gemini | anthropic | openai | fake
 
     # ── Redis ─────────────────────────────────────────────────────────────
