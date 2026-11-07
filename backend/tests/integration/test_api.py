@@ -155,11 +155,16 @@ async def test_part_reference_upload_and_capture_verification(client, monkeypatc
     encoded, buffer = cv2.imencode(".png", image)
     assert encoded
     image_bytes = buffer.tobytes()
+    unrelated_cad = np.full((400, 400, 3), 255, dtype=np.uint8)
+    cv2.putText(unrelated_cad, "OTHER", (40, 220), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 5)
+    encoded, buffer = cv2.imencode(".png", unrelated_cad)
+    assert encoded
+    cad_bytes = buffer.tobytes()
 
     uploaded = await client.put(
         f"/api/v1/parts/{part_number}/references",
         files={
-            "cad_image": ("cad.png", image_bytes, "image/png"),
+            "cad_image": ("cad.png", cad_bytes, "image/png"),
             "reference_image": ("part.png", image_bytes, "image/png"),
         },
     )
@@ -173,3 +178,15 @@ async def test_part_reference_upload_and_capture_verification(client, monkeypatc
     assert verification.status_code == 200
     assert verification.json()["status"] == "Match"
     assert verification.json()["verification_id"]
+    assert verification.json()["reference_kind"] == "physical_part"
+    assert verification.json()["alignment_status"] == "aligned"
+    assert verification.json()["score"] > 0
+    assert verification.json()["visualizations"]["aligned_overlay"].startswith(
+        "data:image/jpeg;base64,"
+    )
+
+    invalid_verification = await client.post(
+        f"/api/v1/parts/{part_number}/verify",
+        files={"image": ("invalid.jpg", b"not an image", "image/jpeg")},
+    )
+    assert invalid_verification.status_code == 415

@@ -24,7 +24,26 @@ def test_identical_cad_and_capture_match():
     assert result["status"] == "Match"
     assert result["score"] >= result["threshold"]
     assert result["geometric_inliers"] >= 6
+    assert result["alignment_status"] == "aligned"
+    assert result["feature_match_percent"] > 0
+    assert result["visualizations"]["aligned_overlay"].startswith("data:image/jpeg;base64,")
+    assert result["visualizations"]["difference_image"].startswith("data:image/png;base64,")
+    assert result["visualizations"]["difference_heatmap"].startswith("data:image/png;base64,")
+    assert result["visualizations"]["matched_features"].startswith("data:image/jpeg;base64,")
     assert "edge_overlap" in result
+
+
+def test_unalignable_images_do_not_report_a_fake_zero_similarity():
+    reference = _drawing()
+    unrelated = np.full((600, 600, 3), 255, dtype=np.uint8)
+
+    result = compare_part_images(unrelated, reference, threshold=0.55)
+
+    assert result["alignment_status"] == "required"
+    assert result["score"] is None
+    assert result["feature_match_percent"] is None
+    assert result["edge_overlap"] is None
+    assert result["visualizations"] == {}
 
 
 def test_rotated_and_resized_part_is_geometrically_aligned():
@@ -36,6 +55,32 @@ def test_rotated_and_resized_part_is_geometrically_aligned():
 
     assert result["status"] == "Match"
     assert result["geometric_inliers"] >= 6
+
+
+def test_part_with_geometric_deviation_still_returns_measured_comparison():
+    reference = _drawing()
+    captured = reference.copy()
+    cv2.line(captured, (140, 330), (260, 330), (0, 0, 0), 8)
+
+    result = compare_part_images(captured, reference, threshold=0.55)
+
+    assert result["alignment_status"] == "aligned"
+    assert isinstance(result["score"], float)
+    assert 0 <= result["score"] <= 1
+    assert result["visualizations"]["difference_heatmap"].startswith("data:image/png;base64,")
+
+
+@pytest.mark.parametrize(
+    "captured, reference",
+    [
+        (None, _drawing()),
+        (np.array([], dtype=np.uint8), _drawing()),
+        (np.zeros((10, 10, 4), dtype=np.uint8), _drawing()),
+    ],
+)
+def test_invalid_image_inputs_raise_instead_of_returning_zero(captured, reference):
+    with pytest.raises(ValueError):
+        compare_part_images(captured, reference)
 
 
 def test_unrelated_image_never_passes_verification():

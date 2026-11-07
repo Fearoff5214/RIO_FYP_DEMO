@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, LoaderCircle, ScanLine, Search, Sparkles } from 'lucide-react'
 import { gatesApi, jobsApi, kbApi, rcaApi, type RcaResult } from '../api'
@@ -46,8 +46,25 @@ type KnowledgeSearchResponse = {
   results?: KnowledgeResult[]
 }
 
+type LiveInspectionContext = {
+  partNumber: string
+  detectedCount: number
+  selectedDefect: { id: string; type: string; confidence: number; note: string | null } | null
+  analysis: { cause: string; actions: string[] } | null
+}
+
 export default function EngineeringAssistant({ jobId, pathname }: { jobId?: string; pathname: string }) {
   const [question, setQuestion] = useState('')
+  const [liveContext, setLiveContext] = useState<LiveInspectionContext | null>(null)
+  useEffect(() => {
+    const updateContext = (event: Event) => {
+      setLiveContext((event as CustomEvent<LiveInspectionContext | null>).detail)
+    }
+    window.addEventListener('novaliseo-live-context', updateContext)
+    const savedContext = sessionStorage.getItem('novaliseo-live-context')
+    if (savedContext) setLiveContext(JSON.parse(savedContext) as LiveInspectionContext)
+    return () => window.removeEventListener('novaliseo-live-context', updateContext)
+  }, [])
   const jobQuery = useQuery({
     queryKey: ['job', jobId],
     queryFn: () => jobsApi.get(jobId!).then((response) => response.data as JobContext),
@@ -90,12 +107,45 @@ export default function EngineeringAssistant({ jobId, pathname }: { jobId?: stri
         <div><strong>AI Engineering Assistant</strong><small>INSPECTION INTELLIGENCE</small></div>
       </div>
 
-      {!jobId ? (
+      {!jobId && !liveContext ? (
         <div className="assistant-empty">
           <ScanLine size={18} />
           <strong>No inspection selected</strong>
           <span>Inspection findings and AI analysis will appear here when a job is open.</span>
         </div>
+      ) : !jobId && liveContext ? (
+        <section className="assistant-section assistant-live-context">
+          <div className="assistant-section-title">LIVE INSPECTION <span>PRE-VERIFICATION</span></div>
+          <strong className="assistant-part">{liveContext.partNumber || 'Part number unavailable'}</strong>
+          <div className="assistant-checks">
+            <div><ScanLine size={14} /><span>{liveContext.detectedCount} defect{liveContext.detectedCount === 1 ? '' : 's'} detected</span></div>
+          </div>
+          {liveContext.selectedDefect ? (
+            <article className="assistant-cause assistant-selected-defect">
+              <div><span>SELECTED REGION · {liveContext.selectedDefect.id}</span><strong>{Math.round(liveContext.selectedDefect.confidence * 100)}%</strong></div>
+              <b>{liveContext.selectedDefect.type.replace(/_/g, ' ')}</b>
+              {liveContext.selectedDefect.note && <p>{liveContext.selectedDefect.note}</p>}
+            </article>
+          ) : <p className="assistant-muted">Select a detected region to load its context here.</p>}
+          {liveContext.analysis && (
+            <div className="assistant-analysis-result assistant-live-analysis">
+              <span>ROOT CAUSE</span><strong>{liveContext.analysis.cause}</strong>
+              {liveContext.analysis.actions.length > 0 && <div><span>RECOMMENDED ACTIONS</span><ul>{liveContext.analysis.actions.slice(0, 3).map((action) => <li key={action}>{action}</li>)}</ul></div>}
+            </div>
+          )}
+          <div className="assistant-suggested-questions">
+            {[
+              'Why was this defect detected?',
+              'Show the zoomed view of the critical defect.',
+              'What is the probable root cause?',
+              'Which defect requires immediate attention?',
+              'What corrective action is recommended?',
+              'Compare the reference and captured images.',
+            ].map((prompt) => (
+              <button type="button" key={prompt} onClick={() => setQuestion(prompt)}>{prompt}</button>
+            ))}
+          </div>
+        </section>
       ) : jobQuery.isLoading ? (
         <div className="assistant-state"><LoaderCircle size={15} className="animate-spin" /> Loading inspection data</div>
       ) : jobQuery.isError || !job ? (
@@ -160,7 +210,12 @@ export default function EngineeringAssistant({ jobId, pathname }: { jobId?: stri
         onSubmit={(event) => {
           event.preventDefault()
           const query = question.trim()
-          if (query) knowledgeSearch.mutate(query)
+          if (query) {
+            const contextQuery = !jobId && liveContext?.selectedDefect
+              ? `${query} Defect: ${liveContext.selectedDefect.type.replace(/_/g, ' ')}; confidence: ${Math.round(liveContext.selectedDefect.confidence * 100)}%.`
+              : query
+            knowledgeSearch.mutate(contextQuery)
+          }
         }}
       >
         <label htmlFor="assistant-question">ASK INSPECTION GUIDANCE</label>

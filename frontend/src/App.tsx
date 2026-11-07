@@ -44,12 +44,7 @@ const primaryNavigation: NavigationItem[] = [
   { to: '/jobs/new', label: 'Live inspection', icon: ScanLine },
 ]
 
-const operationsNavigation: NavigationItem[] = [
-  { to: '/actions', label: 'Corrective actions', icon: Settings2 },
-  { to: '/kb', label: 'Knowledge base', icon: BookOpen },
-]
-
-const workflowSteps = ['Verify', 'Measure', 'Detect', 'Diagnose', 'Report']
+const workflowSteps = ['Verify Part', 'Capture Image', 'Detect Defects', 'Diagnose Root Cause', 'Generate Report']
 
 const routeTitles: Record<string, string> = {
   '/': 'Overview',
@@ -75,7 +70,10 @@ function SidebarLink({ item }: { item: NavigationItem }) {
     <NavLink
       to={item.to}
       end={item.end ?? item.to === '/jobs'}
-      className={({ isActive }) => `sidebar-link${isActive ? ' sidebar-link-active' : ''}`}
+      className={({ isActive }) => {
+        const active = isActive && (item.to !== '/jobs' || item.label === 'Inspection history')
+        return `sidebar-link${active ? ' sidebar-link-active' : ''}`
+      }}
     >
       <Icon size={17} strokeWidth={1.8} />
       <span>{item.label}</span>
@@ -91,6 +89,18 @@ export default function App() {
     localStorage.getItem('novaliseo-theme') === 'dark' ? 'dark' : 'light'
   ))
   const jobId = location.pathname.match(/^\/jobs\/([^/]+)/)?.[1]
+  const inspectionId = jobId && jobId !== 'new' ? jobId : null
+  const analysisNavigation: NavigationItem[] = [
+    { to: inspectionId ? `/jobs/${inspectionId}/label` : '/jobs', label: 'Defect detection', icon: ScanLine },
+    { to: inspectionId ? `/jobs/${inspectionId}/gate2` : '/jobs', label: 'Root cause analysis', icon: Activity },
+    { to: '/actions', label: 'Corrective actions', icon: Settings2 },
+    { to: '/kb', label: 'Knowledge base', icon: BookOpen },
+  ]
+  const engineeringNavigation: NavigationItem[] = [
+    { to: inspectionId ? `/jobs/${inspectionId}/gate1` : '/jobs', label: 'Image comparison', icon: ScanLine },
+    { to: inspectionId ? `/jobs/${inspectionId}/label` : '/jobs', label: 'Defect visualization', icon: Boxes },
+    { to: inspectionId ? `/jobs/${inspectionId}/reports` : '/jobs', label: 'Inspection results', icon: ClipboardList },
+  ]
   const { data: activeJob } = useQuery({
     queryKey: ['job', jobId],
     queryFn: () => jobsApi.get(jobId!).then((response) => response.data as { status?: string }),
@@ -130,7 +140,7 @@ export default function App() {
               <div key={step} className={`workflow-nav-step${activeStep === index ? ' workflow-nav-step-active' : ''}${activeStep > index ? ' workflow-nav-step-done' : ''}`}>
                 <Link to={target} aria-current={activeStep === index ? 'step' : undefined}>
                   <span className="workflow-nav-number">{index + 1}</span>
-                  <span className="workflow-nav-copy"><strong>{step}</strong><small>{['Part setup', 'Dimensional', 'Detection', 'Root cause', 'Approval'][index]}</small></span>
+                  <span className="workflow-nav-copy"><strong>{step}</strong><small>{['Part setup', 'Image capture', 'Detection review', 'Root cause', 'Report approval'][index]}</small></span>
                 </Link>
                 {index < workflowSteps.length - 1 && <span className="workflow-nav-arrow" aria-hidden="true">›</span>}
               </div>
@@ -156,14 +166,18 @@ export default function App() {
       </header>
 
       <aside className="app-sidebar">
-        <div className="sidebar-section-label">PROJECT / ANALYSIS</div>
+        <div className="sidebar-section-label">PROJECT</div>
         <nav className="sidebar-nav" aria-label="Workspace navigation">
           {primaryNavigation.map((item) => <SidebarLink key={item.to} item={item} />)}
         </nav>
 
-        <div className="sidebar-section-label sidebar-section-spaced">QUALITY TOOLS</div>
+        <div className="sidebar-section-label sidebar-section-spaced">QUALITY ANALYSIS</div>
         <nav className="sidebar-nav" aria-label="Operations navigation">
-          {operationsNavigation.map((item) => <SidebarLink key={item.to} item={item} />)}
+          {analysisNavigation.map((item) => <SidebarLink key={`${item.to}-${item.label}`} item={item} />)}
+        </nav>
+        <div className="sidebar-section-label sidebar-section-spaced">ENGINEERING TOOLS</div>
+        <nav className="sidebar-nav" aria-label="Engineering tools navigation">
+          {engineeringNavigation.map((item) => <SidebarLink key={`${item.to}-${item.label}`} item={item} />)}
         </nav>
         <div className="sidebar-live-state"><span className="sidebar-live-dot" /><span>WORKSPACE</span><strong>READY</strong></div>
       </aside>

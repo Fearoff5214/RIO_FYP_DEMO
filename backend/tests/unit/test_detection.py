@@ -39,6 +39,26 @@ def test_classify_severity():
     assert min_conf == pytest.approx(0.8, abs=0.01)
 
 
+def test_yolo_class_map_preserves_distinct_model_classes():
+    from app.cv.detectors.yolo import YoloDetector
+
+    model_classes = {
+        "crazing": "crazing",
+        "inclusion": "inclusion",
+        "patches": "patches",
+        "pitted_surface": "pitted_surface",
+        "rolled-in_scale": "rolled-in_scale",
+        "scratches": "scratch",
+    }
+
+    mapped = {
+        name: YoloDetector.CLASS_MAP.get(name.lower(), name)
+        for name in model_classes
+    }
+
+    assert mapped == model_classes
+
+
 @pytest.mark.asyncio
 async def test_mock_detector_returns_four_defect_types():
     """Mock detector returns exactly the infographic scenario."""

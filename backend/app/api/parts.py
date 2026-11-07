@@ -283,7 +283,7 @@ async def verify_part_capture(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Compare a captured image only with this part number's registered CAD raster."""
+    """Compare a capture with the registered physical-part reference image."""
     from sqlalchemy import select
 
     from app.cv.part_verification import compare_part_images
@@ -312,10 +312,20 @@ async def verify_part_capture(
     image_bytes = await _read_image_upload(image, "Captured image", _MAX_CAPTURE_BYTES)
     captured = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
     cad = cv2.imread(str(cad_path))
-    if captured is None or cad is None:
-        raise HTTPException(status_code=422, detail="Could not decode the captured or CAD image.")
+    reference = cv2.imread(str(reference_path))
+    if captured is None or cad is None or reference is None:
+        raise HTTPException(status_code=422, detail="Could not decode the captured or registered reference image.")
     threshold = _verification_threshold()
-    comparison = compare_part_images(captured, cad, threshold)
+    reference_kind = "physical_part"
+    comparison = compare_part_images(captured, reference, threshold)
+    if comparison["alignment_status"] != "aligned":
+        cad_comparison = compare_part_images(captured, cad, threshold)
+        if (
+            cad_comparison["alignment_status"] == "aligned"
+            or cad_comparison["feature_matches"] > comparison["feature_matches"]
+        ):
+            reference_kind = "cad_drawing"
+            comparison = cad_comparison
 
     verification_id = str(uuid.uuid4())
     capture_dir = get_config().project_root / "tmp" / "part_verification"
@@ -335,6 +345,7 @@ async def verify_part_capture(
         "part_number": part_number,
         "part_name": part.part_name,
         "drawing_rev": part.drawing_rev,
+        "reference_kind": reference_kind,
         "cad_url": f"/api/v1/parts/{part_number}/references/cad",
         "reference_image_url": f"/api/v1/parts/{part_number}/references/image",
     }

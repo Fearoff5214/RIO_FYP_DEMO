@@ -11,14 +11,6 @@ class YoloDetector:
     CLASS_MAP = {
         "scratches": "scratch",
         "scratch": "scratch",
-        "dent": "dent",
-        "crack": "crack",
-        "deformation": "deformation",
-        "patches": "dent",
-        "inclusion": "crack",
-        "pitted_surface": "dent",
-        "rolled-in_scale": "scratch",
-        "crazing": "deformation",
     }
 
     def __init__(self, weights_path: str):

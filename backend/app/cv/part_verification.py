@@ -1,6 +1,8 @@
 """Geometric comparison of a camera image with a part's raster CAD reference."""
 from __future__ import annotations
 
+import base64
+
 import cv2
 import numpy as np
 
@@ -10,7 +12,7 @@ def compare_part_images(
     reference: np.ndarray,
     threshold: float = 0.55,
 ) -> dict:
-    """Compare two images using ORB correspondences and a RANSAC homography."""
+    """Compare normalized images using SIFT/ORB matches and a RANSAC homography."""
     captured_gray = _prepare(captured)
     reference_gray = _prepare(reference)
 
@@ -56,11 +58,23 @@ def compare_part_images(
             continue
 
         inliers = int(inlier_mask.sum())
+        if inliers < 6:
+            continue
         inlier_ratio = inliers / len(good)
         feature_coverage = min(1.0, inliers / 20.0)
         feature_score = 0.65 * inlier_ratio + 0.35 * feature_coverage
         candidates.append(
-            (feature_score, homography, inliers, len(good), inlier_ratio)
+            (
+                feature_score,
+                homography,
+                inliers,
+                len(good),
+                inlier_ratio,
+                reference_points,
+                captured_points,
+                good,
+                inlier_mask,
+            )
         )
 
     if not candidates:
@@ -74,16 +88,40 @@ def compare_part_images(
             feature_matches=matched_features,
         )
 
-    feature_score, homography, inliers, match_count, inlier_ratio = max(
+    (
+        feature_score,
+        homography,
+        inliers,
+        match_count,
+        inlier_ratio,
+        reference_points,
+        captured_points,
+        good_matches,
+        inlier_mask,
+    ) = max(
         candidates, key=lambda candidate: candidate[0]
     )
 
     height, width = captured_gray.shape
-    aligned_reference = cv2.warpPerspective(
-        reference_gray, homography, (width, height)
+    reference_border = np.concatenate(
+        (
+            reference_gray[0, :],
+            reference_gray[-1, :],
+            reference_gray[:, 0],
+            reference_gray[:, -1],
+        )
     )
-    captured_edges = cv2.Canny(captured_gray, 60, 160) > 0
-    reference_edges = cv2.Canny(aligned_reference, 60, 160) > 0
+    aligned_reference = cv2.warpPerspective(
+        reference_gray,
+        homography,
+        (width, height),
+        borderValue=int(np.median(reference_border)),
+    )
+    reference_mask = cv2.warpPerspective(
+        np.full_like(reference_gray, 255), homography, (width, height)
+    ) > 0
+    captured_edges = (cv2.Canny(captured_gray, 60, 160) > 0) & reference_mask
+    reference_edges = (cv2.Canny(aligned_reference, 60, 160) > 0) & reference_mask
     captured_distance = cv2.distanceTransform(
         (~captured_edges).astype(np.uint8), cv2.DIST_L2, 3
     )
@@ -127,15 +165,48 @@ def compare_part_images(
             f"(captured {captured_contours}, reference {reference_contours})."
         )
 
+    aligned_preview = cv2.addWeighted(captured_gray, 0.5, aligned_reference, 0.5, 0)
+    absolute_difference = cv2.absdiff(captured_gray, aligned_reference)
+    absolute_difference[~reference_mask] = 0
+    encoded, difference_heatmap = cv2.imencode(
+        ".png",
+        cv2.applyColorMap(absolute_difference, cv2.COLORMAP_JET),
+    )
+    if not encoded:
+        raise RuntimeError("Could not encode the image-comparison heatmap.")
+    encoded, difference_image = cv2.imencode(".png", absolute_difference)
+    if not encoded:
+        raise RuntimeError("Could not encode the image-comparison difference image.")
+    matched_features = cv2.drawMatches(
+        reference_gray,
+        reference_points,
+        captured_gray,
+        captured_points,
+        good_matches,
+        None,
+        matchesMask=inlier_mask.ravel().astype(int).tolist(),
+        flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+    )
+
     return {
         "status": status,
         "score": round(score, 4),
+        "alignment_status": "aligned",
         "threshold": threshold,
         "feature_matches": match_count,
+        "feature_match_percent": round(inlier_ratio, 4),
         "geometric_inliers": inliers,
         "edge_overlap": round(edge_overlap, 4),
         "captured_contours": captured_contours,
         "reference_contours": reference_contours,
+        "visualizations": {
+            "aligned_overlay": _encode_preview(aligned_preview),
+            "difference_image": "data:image/png;base64,"
+            + base64.b64encode(difference_image).decode("ascii"),
+            "difference_heatmap": "data:image/png;base64,"
+            + base64.b64encode(difference_heatmap).decode("ascii"),
+            "matched_features": _encode_preview(matched_features),
+        },
         "differences": differences,
     }
 
@@ -143,7 +214,7 @@ def compare_part_images(
 def _prepare(image: np.ndarray) -> np.ndarray:
     if image is None or image.size == 0:
         raise ValueError("Image is empty or could not be decoded.")
-    if image.ndim == 3:
+    if image.ndim == 3 and image.shape[2] == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     elif image.ndim == 2:
         gray = image
@@ -187,12 +258,30 @@ def _contour_count(edges: np.ndarray) -> int:
 def _manual_result(threshold: float, message: str, **metrics: int) -> dict:
     return {
         "status": "Needs Manual Inspection",
-        "score": 0.0,
+        "score": None,
+        "alignment_status": "required",
         "threshold": threshold,
         "feature_matches": metrics.get("feature_matches", 0),
-        "geometric_inliers": 0,
-        "edge_overlap": 0.0,
-        "captured_contours": 0,
-        "reference_contours": 0,
+        "feature_match_percent": None,
+        "geometric_inliers": None,
+        "edge_overlap": None,
+        "captured_contours": None,
+        "reference_contours": None,
+        "visualizations": {},
         "differences": [message],
     }
+
+
+def _encode_preview(image: np.ndarray) -> str:
+    height, width = image.shape[:2]
+    scale = min(1.0, 1000 / max(height, width))
+    if scale < 1:
+        image = cv2.resize(
+            image,
+            (round(width * scale), round(height * scale)),
+            interpolation=cv2.INTER_AREA,
+        )
+    encoded, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 82])
+    if not encoded:
+        raise RuntimeError("Could not encode an image-comparison preview.")
+    return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("ascii")

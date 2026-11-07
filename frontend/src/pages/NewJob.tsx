@@ -1,33 +1,39 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertCircle,
-  ArrowRight,
   Camera,
   Check,
-  CheckCircle2,
-  Circle,
-  CircleDot,
   FileImage,
-  Focus,
-  Info,
+  Layers,
   LoaderCircle,
+  Maximize2,
+  Move,
   RefreshCw,
   ScanLine,
-  ShieldCheck,
   Upload,
   Video,
-  X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
-import { demoApi, jobsApi, partsApi, rcaApi, type LiveDetection, type RcaResult, type RcaStatus } from '../api'
+import { demoApi, jobsApi, partsApi, rcaApi, type LiveDefect, type LiveDetection, type RcaResult, type RcaStatus } from '../api'
 
 type Verification = {
   status: 'Match' | 'Mismatch' | 'Needs Manual Inspection'
-  score: number
+  score: number | null
   threshold: number
   feature_matches: number
-  geometric_inliers: number
-  edge_overlap: number
+  feature_match_percent?: number | null
+  geometric_inliers: number | null
+  edge_overlap: number | null
+  alignment_status?: 'aligned' | 'required'
+  visualizations?: {
+    aligned_overlay?: string
+    difference_image?: string
+    difference_heatmap?: string
+    matched_features?: string
+  }
+  reference_kind?: 'physical_part' | 'cad_drawing'
   differences: string[]
   verification_id: string
 }
@@ -43,17 +49,52 @@ function errorMessage(error: any, fallback: string) {
   return error?.response?.data?.detail ?? error?.message ?? fallback
 }
 
+function formatPercent(value: number | null | undefined) {
+  return value == null ? 'Not available' : `${(value * 100).toFixed(1)}%`
+}
+
+function formatCount(value: number | null | undefined) {
+  return value == null ? 'Not available' : String(value)
+}
+
 const DEMO_SECONDS_PER_FRAME = 6
 
 const DEFECT_COLORS: Record<string, string> = {
-  scratch: '#ffd400',
-  dent: '#ff7a00',
-  crack: '#ff2d55',
-  deformation: '#00c2ff',
-  size_mismatch: '#d946ef',
+  scratch: '#fbc02d',
+  dent: '#fb8c00',
+  crack: '#e53935',
+  deformation: '#00bcd4',
+  size_mismatch: '#1671b8',
+  crazing: '#8e44ad',
+  inclusion: '#6d4c8d',
+  patches: '#2e7d8f',
+  pitted_surface: '#7b6d3a',
+  'rolled-in_scale': '#607d8b',
 }
 
-function DefectOverlay({ detection }: { detection: LiveDetection | null }) {
+const SEVERITY_COLORS: Record<string, string> = {
+  critical: '#e53935',
+  high: '#f57c00',
+  moderate: '#fbc02d',
+  low: '#2eaf75',
+  minor: '#2eaf75',
+}
+
+function defectColor(defect: LiveDefect) {
+  return (defect.severity && SEVERITY_COLORS[defect.severity.toLowerCase()])
+    || DEFECT_COLORS[defect.defect_type]
+    || '#1671b8'
+}
+
+function DefectOverlay({
+  detection,
+  selectedDefectId,
+  onSelect,
+}: {
+  detection: LiveDetection | null
+  selectedDefectId?: string | null
+  onSelect?: (defectId: string) => void
+}) {
   if (!detection) return null
   const font = Math.max(11, detection.height / 40)
   // keep labels inside the image: shift left when the text would run past the right edge
@@ -66,12 +107,17 @@ function DefectOverlay({ detection }: { detection: LiveDetection | null }) {
       preserveAspectRatio="xMidYMid meet"
     >
       {detection.defects.map((defect) => {
-        const color = DEFECT_COLORS[defect.defect_type] ?? '#ff3b6b'
+        const color = defectColor(defect)
         const points = defect.polygon.map(([x, y]) => `${x},${y}`).join(' ')
         const label = `${defect.defect_type.replace('_', ' ')} ${Math.round(defect.confidence * 100)}%`
+        const selected = defect.defect_id === selectedDefectId
         return (
-          <g key={defect.defect_id}>
-            <polygon points={points} fill={color} fillOpacity={0.35} stroke={color} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          <g
+            key={defect.defect_id}
+            className={onSelect ? 'inspection-defect-target' : undefined}
+            onClick={() => onSelect?.(defect.defect_id)}
+          >
+            <polygon points={points} fill={color} fillOpacity={selected ? 0.48 : 0.24} stroke={color} strokeWidth={selected ? 4 : 2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
             {defect.polygon.map(([x, y], index) => (
               <circle key={index} cx={x} cy={y} r={3} fill="#fff" stroke={color} strokeWidth={1} vectorEffect="non-scaling-stroke" />
             ))}
@@ -88,6 +134,101 @@ function DefectOverlay({ detection }: { detection: LiveDetection | null }) {
       })}
     </svg>
   )
+}
+
+function EngineeringViewport({
+  title,
+  subtitle,
+  status,
+  zoom,
+  onZoomChange,
+  onFit,
+  focusPoint,
+  children,
+}: {
+  title: string
+  subtitle: string
+  status?: string
+  zoom: number
+  onZoomChange: (zoom: number) => void
+  onFit: () => void
+  focusPoint?: { x: number; y: number; aspectRatio: number; token: string }
+  children: ReactNode
+}) {
+  const [panEnabled, setPanEnabled] = useState(false)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const dragStart = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!focusPoint || !stageRef.current) return
+    const { width, height } = stageRef.current.getBoundingClientRect()
+    const imageScale = Math.min(width / focusPoint.aspectRatio, height)
+    const renderedWidth = imageScale * focusPoint.aspectRatio
+    const renderedHeight = imageScale
+    const marginX = (width - renderedWidth) / 2
+    const marginY = (height - renderedHeight) / 2
+    const nextZoom = Math.max(zoom, 1.5)
+    onZoomChange(nextZoom)
+    setOffset({
+      x: (width / 2 - marginX - focusPoint.x * renderedWidth) * nextZoom,
+      y: (height / 2 - marginY - focusPoint.y * renderedHeight) * nextZoom,
+    })
+  }, [focusPoint?.token, focusPoint?.x, focusPoint?.y, focusPoint?.aspectRatio, zoom, onZoomChange])
+
+  const reset = () => {
+    setOffset({ x: 0, y: 0 })
+    onFit()
+  }
+
+  return (
+    <section className="engineering-viewer panel">
+      <header className="engineering-viewer-head">
+        <div className="engineering-viewer-title">
+          <strong>{title}</strong>
+          <small>{subtitle}</small>
+        </div>
+        {status && <span className="engineering-viewer-status">{status}</span>}
+      </header>
+      <div
+        ref={stageRef}
+        className={`engineering-viewer-stage${panEnabled ? ' engineering-viewer-stage-pan' : ''}`}
+        onPointerDown={(event) => {
+          if (!panEnabled) return
+          dragStart.current = { x: event.clientX, y: event.clientY, offsetX: offset.x, offsetY: offset.y }
+          event.currentTarget.setPointerCapture(event.pointerId)
+        }}
+        onPointerMove={(event) => {
+          if (!dragStart.current) return
+          setOffset({
+            x: dragStart.current.offsetX + event.clientX - dragStart.current.x,
+            y: dragStart.current.offsetY + event.clientY - dragStart.current.y,
+          })
+        }}
+        onPointerUp={() => { dragStart.current = null }}
+        onPointerCancel={() => { dragStart.current = null }}
+      >
+        <div className="engineering-viewer-content" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}>
+          {children}
+        </div>
+        <div className="engineering-viewer-tools" aria-label={`${title} image controls`}>
+          <button type="button" onClick={() => onZoomChange(Math.min(3, zoom + 0.2))} aria-label="Zoom in" title="Zoom in"><ZoomIn size={14} /></button>
+          <button type="button" onClick={() => onZoomChange(Math.max(0.6, zoom - 0.2))} aria-label="Zoom out" title="Zoom out"><ZoomOut size={14} /></button>
+          <button type="button" onClick={reset} aria-label="Fit to view" title="Fit to view"><Maximize2 size={13} /></button>
+          <button type="button" className={panEnabled ? 'is-selected' : ''} onClick={() => setPanEnabled((enabled) => !enabled)} aria-label="Toggle pan" title="Toggle pan"><Move size={13} /></button>
+        </div>
+        <span className="engineering-viewer-zoom">{Math.round(zoom * 100)}%</span>
+      </div>
+    </section>
+  )
+}
+
+type DefectCrop = {
+  defect: LiveDefect
+  src: string
+  width: number
+  height: number
+  polygon: number[][]
 }
 
 export default function NewJob() {
@@ -109,18 +250,29 @@ export default function NewJob() {
   const [captureDetection, setCaptureDetection] = useState<LiveDetection | null>(null)
   const [rcaStatus, setRcaStatus] = useState<RcaStatus | null>(null)
   const [rcaResult, setRcaResult] = useState<RcaResult | null>(null)
+  const [rcaDefectId, setRcaDefectId] = useState<string | null>(null)
   const [rcaLoading, setRcaLoading] = useState(false)
   const [rcaError, setRcaError] = useState('')
   const [capturedImage, setCapturedImage] = useState<Blob | null>(null)
   const [capturedPreview, setCapturedPreview] = useState('')
   const [references, setReferences] = useState<References | null>(null)
   const [referenceUrls, setReferenceUrls] = useState<{ cad: string; image: string } | null>(null)
+  const [referencesLoading, setReferencesLoading] = useState(true)
   const [verification, setVerification] = useState<Verification | null>(null)
+  const [verificationLoading, setVerificationLoading] = useState(false)
+  const [verificationError, setVerificationError] = useState('')
   const [cadUpload, setCadUpload] = useState<File | null>(null)
   const [referenceUpload, setReferenceUpload] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [referenceError, setReferenceError] = useState('')
+  const [selectedDefectId, setSelectedDefectId] = useState<string | null>(null)
+  const [referenceZoom, setReferenceZoom] = useState(1)
+  const [captureZoom, setCaptureZoom] = useState(1)
+  const [showLiveFeed, setShowLiveFeed] = useState(false)
+  const [captureWhenReady, setCaptureWhenReady] = useState(false)
+  const [visualizationMode, setVisualizationMode] = useState<'original' | 'detection' | 'segmentation' | 'heatmap'>('detection')
+  const [defectCrops, setDefectCrops] = useState<DefectCrop[]>([])
 
   const startSimulatedCamera = async () => {
     setError('')
@@ -219,14 +371,17 @@ export default function NewJob() {
     setRcaLoading(true)
     setRcaError('')
     try {
+      const selectedDefect = analyseDefects.find((defect) => defect.defect_id === selectedDefectId)
+      const defectsToAnalyze = selectedDefect ? [selectedDefect] : analyseDefects
       const response = await rcaApi.analyze({
-        defects: analyseDefects.slice(0, 20).map((defect) => ({
+        defects: defectsToAnalyze.slice(0, 20).map((defect) => ({
           defect_type: defect.defect_type,
           confidence: defect.confidence,
           note: defect.note ?? null,
         })),
       })
       setRcaResult(response.data)
+      setRcaDefectId(selectedDefect?.defect_id ?? null)
     } catch (analysisError) {
       setRcaResult(null)
       setRcaError(errorMessage(analysisError, 'Root cause analysis failed.'))
@@ -269,7 +424,7 @@ export default function NewJob() {
     void video.play().catch(() => {
       setError('The browser could not start the camera preview. Check camera permissions and try again.')
     })
-  }, [cameraActive, selectedDevice])
+  }, [cameraActive, selectedDevice, showLiveFeed])
 
   const captureFrame = useCallback(() => {
     const video = videoRef.current
@@ -292,14 +447,48 @@ export default function NewJob() {
         return
       }
       setCapturedImage(blob)
-      setCaptureDetection(null)
-      partsApi.liveDetect(blob).then((response) => setCaptureDetection(response.data)).catch(() => setCaptureDetection(null))
-      setCapturedPreview(URL.createObjectURL(blob))
       setVerification(null)
+      setVerificationError('')
+      setCaptureDetection(null)
+      setSelectedDefectId(null)
+      setRcaResult(null)
+      setRcaDefectId(null)
+      setRcaError('')
+      setShowLiveFeed(false)
+      partsApi.liveDetect(blob).then((response) => setCaptureDetection(response.data)).catch((detectionError) => {
+        setCaptureDetection(null)
+        setError(errorMessage(detectionError, 'Defect detection failed for this captured image.'))
+      })
+      setCapturedPreview(URL.createObjectURL(blob))
       setError('')
       setAutoCapture(false)
     }, 'image/jpeg', 0.92)
   }, [])
+
+  useEffect(() => {
+    if (!captureWhenReady) return
+    let completed = false
+    const interval = window.setInterval(() => {
+      const video = videoRef.current
+      if (!video || video.videoWidth === 0 || completed) return
+      completed = true
+      window.clearInterval(interval)
+      window.clearTimeout(timeout)
+      setCaptureWhenReady(false)
+      captureFrame()
+    }, 100)
+    const timeout = window.setTimeout(() => {
+      if (completed) return
+      completed = true
+      window.clearInterval(interval)
+      setCaptureWhenReady(false)
+      setError('The camera did not produce a usable frame in time. Check the camera connection and retry.')
+    }, 5000)
+    return () => {
+      window.clearInterval(interval)
+      window.clearTimeout(timeout)
+    }
+  }, [captureWhenReady, captureFrame])
 
   useEffect(() => {
     let active = true
@@ -307,7 +496,13 @@ export default function NewJob() {
     setReferences(null)
     setReferenceUrls(null)
     setReferenceError('')
-    if (!normalizedPart) return
+    setVerification(null)
+    setVerificationError('')
+    setReferencesLoading(true)
+    if (!normalizedPart) {
+      setReferencesLoading(false)
+      return
+    }
 
     const timer = window.setTimeout(async () => {
       try {
@@ -329,6 +524,8 @@ export default function NewJob() {
         }
       } catch (referenceFetchError) {
         if (active) setReferenceError(errorMessage(referenceFetchError, 'Could not load this part or its references.'))
+      } finally {
+        if (active) setReferencesLoading(false)
       }
     }, 250)
 
@@ -343,8 +540,8 @@ export default function NewJob() {
     streamRef.current?.getTracks().forEach((track) => track.stop())
   }, [])
 
-  useEffect(() => {
-    if (capturedPreview) return () => URL.revokeObjectURL(capturedPreview)
+  useEffect(() => () => {
+    if (capturedPreview) URL.revokeObjectURL(capturedPreview)
   }, [capturedPreview])
 
   useEffect(() => {
@@ -355,6 +552,110 @@ export default function NewJob() {
       }
     }
   }, [referenceUrls])
+
+  useEffect(() => {
+    let active = true
+    const detection = capturedPreview ? captureDetection : liveDetection
+    if (!capturedPreview || !detection?.defects.length) {
+      setDefectCrops([])
+      setSelectedDefectId(null)
+      return
+    }
+
+    const image = new Image()
+    image.onload = () => {
+      if (!active) return
+      const scaleX = image.naturalWidth / detection.width
+      const scaleY = image.naturalHeight / detection.height
+      const crops = detection.defects.map((defect): DefectCrop | null => {
+        const x1 = Math.max(0, Math.min(image.naturalWidth, defect.bbox.x1 * scaleX))
+        const y1 = Math.max(0, Math.min(image.naturalHeight, defect.bbox.y1 * scaleY))
+        const x2 = Math.max(0, Math.min(image.naturalWidth, defect.bbox.x2 * scaleX))
+        const y2 = Math.max(0, Math.min(image.naturalHeight, defect.bbox.y2 * scaleY))
+        const boxWidth = x2 - x1
+        const boxHeight = y2 - y1
+        if (![x1, y1, x2, y2].every(Number.isFinite) || boxWidth <= 0 || boxHeight <= 0) return null
+
+        const aspectRatio = 1.6
+        let cropWidth = boxWidth * 1.5
+        let cropHeight = boxHeight * 1.5
+        if (cropWidth / cropHeight < aspectRatio) cropWidth = cropHeight * aspectRatio
+        else cropHeight = cropWidth / aspectRatio
+        cropWidth = Math.min(image.naturalWidth, cropWidth)
+        cropHeight = Math.min(image.naturalHeight, cropHeight)
+        if (cropWidth / cropHeight < aspectRatio) cropWidth = Math.min(image.naturalWidth, cropHeight * aspectRatio)
+        else if (cropWidth / cropHeight > aspectRatio) cropHeight = Math.min(image.naturalHeight, cropWidth / aspectRatio)
+
+        const centerX = (x1 + x2) / 2
+        const centerY = (y1 + y2) / 2
+        const cropX = Math.max(0, Math.min(image.naturalWidth - cropWidth, centerX - cropWidth / 2))
+        const cropY = Math.max(0, Math.min(image.naturalHeight - cropHeight, centerY - cropHeight / 2))
+        const canvas = document.createElement('canvas')
+        canvas.width = 640
+        canvas.height = 400
+        const context = canvas.getContext('2d')
+        if (!context) {
+          setError('Could not create the defect crop visualization. Try capturing the image again.')
+          return null
+        }
+        const cropScale = Math.min(canvas.width / cropWidth, canvas.height / cropHeight)
+        const renderedWidth = cropWidth * cropScale
+        const renderedHeight = cropHeight * cropScale
+        const imageOffsetX = (canvas.width - renderedWidth) / 2
+        const imageOffsetY = (canvas.height - renderedHeight) / 2
+        context.fillStyle = '#edf2f6'
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        context.drawImage(image, cropX, cropY, cropWidth, cropHeight, imageOffsetX, imageOffsetY, renderedWidth, renderedHeight)
+        const polygon = defect.polygon
+          .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
+          .map(([x, y]) => [(x * scaleX - cropX) * cropScale + imageOffsetX, (y * scaleY - cropY) * cropScale + imageOffsetY])
+        if (polygon.length < 3) {
+          polygon.splice(0, polygon.length,
+            [(x1 - cropX) * cropScale + imageOffsetX, (y1 - cropY) * cropScale + imageOffsetY],
+            [(x2 - cropX) * cropScale + imageOffsetX, (y1 - cropY) * cropScale + imageOffsetY],
+            [(x2 - cropX) * cropScale + imageOffsetX, (y2 - cropY) * cropScale + imageOffsetY],
+            [(x1 - cropX) * cropScale + imageOffsetX, (y2 - cropY) * cropScale + imageOffsetY],
+          )
+        }
+        return { defect, src: canvas.toDataURL('image/jpeg', 0.92), width: canvas.width, height: canvas.height, polygon }
+      }).filter((crop): crop is DefectCrop => crop !== null)
+      setDefectCrops(crops)
+      setSelectedDefectId((current) => crops.some(({ defect }) => defect.defect_id === current)
+        ? current
+        : crops[0]?.defect.defect_id ?? null)
+    }
+    image.onerror = () => {
+      if (active) setError('Could not load the captured image for defect cropping. Capture the image again.')
+    }
+    image.src = capturedPreview
+    return () => { active = false }
+  }, [capturedPreview, captureDetection, liveDetection])
+
+  useEffect(() => {
+    const selected = (captureDetection?.defects ?? []).find((defect) => defect.defect_id === selectedDefectId)
+      ?? (liveDetection?.defects ?? []).find((defect) => defect.defect_id === selectedDefectId)
+    const context = {
+      partNumber,
+      detectedCount: analyseDefects.length,
+      selectedDefect: selected ? {
+        id: selected.defect_id,
+        type: selected.defect_type,
+        confidence: selected.confidence,
+        note: selected.note ?? null,
+      } : null,
+      analysis: rcaResult && rcaDefectId === selectedDefectId ? {
+        cause: rcaResult.root_cause.cause,
+        actions: rcaResult.root_cause.corrective_actions,
+      } : null,
+    }
+    sessionStorage.setItem('novaliseo-live-context', JSON.stringify(context))
+    window.dispatchEvent(new CustomEvent('novaliseo-live-context', { detail: context }))
+  }, [partNumber, analyseDefects.length, selectedDefectId, captureDetection, liveDetection, rcaResult, rcaDefectId])
+
+  useEffect(() => () => {
+    sessionStorage.removeItem('novaliseo-live-context')
+    window.dispatchEvent(new CustomEvent('novaliseo-live-context', { detail: null }))
+  }, [])
 
   useEffect(() => {
     if (!liveMarking || !cameraActive) {
@@ -378,8 +679,11 @@ export default function NewJob() {
           if (!blob) return
           const response = await partsApi.liveDetect(blob)
           if (!cancelled && sentFor === frameIndexRef.current) setLiveDetection(response.data)   // drop stale results
-        } catch {
-          if (!cancelled) setLiveDetection(null)
+        } catch (detectionError) {
+          if (!cancelled) {
+            setLiveDetection(null)
+            setError(errorMessage(detectionError, 'Live defect detection failed. Check the API connection.'))
+          }
         } finally {
           inFlight = false
         }
@@ -467,16 +771,17 @@ export default function NewJob() {
 
   const verifyCapture = async () => {
     if (!capturedImage) return
-    setLoading(true)
+    setVerificationLoading(true)
+    setVerificationError('')
     setError('')
     setVerification(null)
     try {
       const response = await partsApi.verify(partNumber.trim(), capturedImage)
       setVerification(response.data as Verification)
     } catch (verificationError) {
-      setError(errorMessage(verificationError, 'Image comparison failed.'))
+      setVerificationError(errorMessage(verificationError, 'Image comparison failed.'))
     } finally {
-      setLoading(false)
+      setVerificationLoading(false)
     }
   }
 
@@ -493,420 +798,379 @@ export default function NewJob() {
     }
   }
 
-  const resultTone = verification?.status === 'Match'
-    ? 'verification-result-match'
-    : verification?.status === 'Mismatch'
-      ? 'verification-result-mismatch'
-      : 'verification-result-manual'
+  const activeDetection = showLiveFeed && cameraActive ? liveDetection : captureDetection
+  const selectedCrop = defectCrops.find(({ defect }) => defect.defect_id === selectedDefectId)
+  const selectedAnalysis = rcaDefectId === selectedDefectId ? rcaResult : null
+  const defectsByType = (activeDetection?.defects ?? []).reduce<Record<string, number>>((counts, defect) => {
+    counts[defect.defect_type] = (counts[defect.defect_type] ?? 0) + 1
+    return counts
+  }, {})
+  const severityCount = (severity: string) => (activeDetection?.defects ?? []).filter((defect) => defect.severity?.toLowerCase() === severity).length
+  const hasSeverityData = Boolean(activeDetection?.defects.length && activeDetection.defects.every((defect) => (
+    typeof defect.severity === 'string'
+  )))
+  const selectedDefect = activeDetection?.defects.find((defect) => defect.defect_id === selectedDefectId)
+  const focusPoint = selectedDefect && activeDetection ? {
+    x: ((selectedDefect.bbox.x1 + selectedDefect.bbox.x2) / 2) / activeDetection.width,
+    y: ((selectedDefect.bbox.y1 + selectedDefect.bbox.y2) / 2) / activeDetection.height,
+    aspectRatio: activeDetection.width / activeDetection.height,
+    token: selectedDefect.defect_id,
+  } : undefined
+  const verificationAlignmentStatus = verification?.alignment_status
+    ?? (verification?.geometric_inliers != null && verification.geometric_inliers > 0 ? 'aligned' : 'required')
+  const verificationScore = verificationAlignmentStatus === 'aligned' ? verification?.score : null
 
   return (
-    <div className="inspection-page space-y-5">
-      <header className="page-heading">
+    <div className="live-inspection-page">
+      <header className="live-inspection-heading">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold tracking-[0.12em] text-slate-400">
-            <span>QUALITY OPERATIONS</span><span className="text-slate-300">/</span><span className="text-slate-500">NEW JOB</span>
-          </div>
-          <h1>Live part inspection</h1>
-          <p>Verify the physical component against its registered reference before starting AI inspection.</p>
+          <div className="live-inspection-kicker">QUALITY OPERATIONS <span>/</span> LIVE INSPECTION</div>
+          <h1>Engineering inspection workspace</h1>
+          <p>Compare the registered drawing with a live or captured component image.</p>
         </div>
-        <div className="status-pill"><ShieldCheck size={14} /> Part verification required</div>
-      </header>
-
-      <div className="inspection-steps" aria-label="Inspection steps">
-        <div className="inspection-step inspection-step-current"><span className="inspection-step-number">1</span><span>Verify part</span></div>
-        <span className="inspection-step-line" />
-        <div className="inspection-step"><span className="inspection-step-number">2</span><span>Inspect quality</span></div>
-        <span className="inspection-step-line" />
-        <div className="inspection-step"><span className="inspection-step-number">3</span><span>Review results</span></div>
-      </div>
-
-      <section className="panel flex flex-wrap items-end justify-between gap-4 p-4 sm:p-5">
-        <div className="min-w-[220px] flex-1">
-          <label htmlFor="part-number" className="field-label">Expected component</label>
+        <div className="live-part-control">
+          <label htmlFor="part-number">PART NUMBER</label>
           <input
             id="part-number"
-            type="text"
             value={partNumber}
             onChange={(event) => {
               setPartNumber(event.target.value)
               setCapturedImage(null)
+              setCaptureDetection(null)
+              setSelectedDefectId(null)
+              setRcaResult(null)
+              setRcaDefectId(null)
               setVerification(null)
               setCapturedPreview('')
+              setError('')
             }}
-            className="w-full max-w-lg px-3 text-sm"
-            placeholder="Enter registered part number"
-            required
+            placeholder="Registered part number"
           />
-          {references && (
-            <p className="mt-2 text-[11px] text-slate-500">
-              <span className="font-semibold text-slate-700">{references.part_name}</span>
-              <span className="mx-2 text-slate-300">·</span>
-              Drawing revision {references.drawing_rev}
-            </p>
+          <span className={`engineering-status-tag ${references?.configured ? 'is-ready' : ''}`}>
+            {references?.configured ? 'REFERENCE READY' : 'REFERENCE REQUIRED'}
+          </span>
+        </div>
+      </header>
+
+      <section className="engineering-visualization-grid" aria-label="Reference and captured image comparison">
+        <EngineeringViewport
+          title="2D Reference Drawing"
+          subtitle={`${partNumber || 'Selected part'}${references?.drawing_rev ? ` · Rev ${references.drawing_rev}` : ''}`}
+          status={references?.configured ? 'REGISTERED' : undefined}
+          zoom={referenceZoom}
+          onZoomChange={setReferenceZoom}
+          onFit={() => setReferenceZoom(1)}
+        >
+          {referenceUrls?.cad ? (
+            <img className="engineering-image" src={referenceUrls.cad} alt={`Registered 2D CAD drawing for ${partNumber}`} />
+          ) : (
+            <div className="engineering-empty-visual">
+              <FileImage size={26} />
+              <strong>CAD drawing not available</strong>
+              <span>{referenceError || 'Register a drawing for this part to compare engineering geometry.'}</span>
+            </div>
           )}
-        </div>
-        <div className={`status-pill ${references?.configured ? 'status-green' : 'status-neutral'}`}>
-          {references?.configured ? <CheckCircle2 size={14} /> : <FileImage size={14} />}
-          {references?.configured ? 'Reference set ready' : 'Reference set required'}
-        </div>
-      </section>
+        </EngineeringViewport>
 
-      {referenceError && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          <Info size={15} className="mt-0.5 shrink-0" />{referenceError}
-        </div>
-      )}
-
-      <div className="inspection-workspace">
-        <section className="panel overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50 text-[#527b9e]"><Video size={16} /></div>
-              <div>
-                <h2 className="panel-title">Capture station</h2>
-                <p className="mt-0.5 text-[10px] text-slate-500">Position the component in the camera view</p>
-              </div>
-            </div>
-            <div className={`status-pill ${cameraActive ? 'status-green' : 'status-neutral'}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${cameraActive ? 'bg-green-600' : 'bg-slate-400'}`} />
-              {cameraActive ? (cameraSource === 'live' ? 'Live camera connected' : 'Simulated camera running') : 'Camera not connected'}
-            </div>
-          </div>
-
-          <div className="space-y-4 p-4 sm:p-5">
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="min-w-0">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="eyebrow">Live feed</span>
-                  {cameraActive && <span className="flex items-center gap-1.5 text-[10px] text-emerald-700"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-600" />LIVE</span>}
-                </div>
-                <div className={`camera-stage aspect-video${cameraSource === 'live' ? ' stage-wide' : ''}`}>
-                  {cameraActive ? (
-                    <>
-                      <video ref={videoRef} autoPlay playsInline muted className="relative z-[1] h-full w-full object-contain" />
-                      <DefectOverlay detection={liveDetection} />
-                      <div className="pointer-events-none absolute inset-[12%] z-[2] rounded border border-dashed border-white/75 shadow-[0_0_0_999px_rgba(27,43,59,0.12)]" />
-                      <div className="pointer-events-none absolute bottom-2 left-2 z-[3] rounded bg-slate-900/70 px-2 py-1 text-[9px] font-medium text-white">Center component in frame</div>
-                    </>
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
-                      <div className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-400"><Camera size={19} /></div>
-                      <p className="mt-3 text-xs font-semibold text-slate-600">Camera preview is offline</p>
-                      <p className="mt-1 max-w-[230px] text-[10px] leading-4 text-slate-500">Start the simulated camera to play the sample inspection inputs, or connect a live camera.</p>
-                    </div>
-                  )}
-                </div>
-                <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-4 text-slate-500">
-                  <Focus size={13} className="mt-0.5 shrink-0 text-slate-400" />
-                  Keep the full component inside the guide and hold it steady for a clear capture.
-                </p>
-              </div>
-
-              <div className="min-w-0">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="eyebrow">Latest capture</span>
-                  {capturedImage && <span className="status-pill status-blue"><Check size={12} />Captured</span>}
-                </div>
-                <div className={`image-stage stage-16x9${cameraSource === 'live' ? ' stage-wide' : ''}`}>
-                  {capturedPreview ? (
-                    <>
-                      <img src={capturedPreview} alt="Latest captured component" />
-                      <DefectOverlay detection={captureDetection} />
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center px-5 text-center">
-                      <FileImage size={22} className="text-slate-300" />
-                      <p className="mt-2 text-[11px] text-slate-500">Captured image will appear here</p>
-                    </div>
-                  )}
-                </div>
-                <p className="mt-2 text-[10px] leading-4 text-slate-500">Review the image for focus, framing, and surface visibility before comparison.</p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-              <div className="flex flex-wrap items-center gap-2">
-                {!cameraActive ? (
-                  <>
-                    <button type="button" onClick={startSimulatedCamera} className="btn-primary">
-                      <Camera size={14} /> Start simulated camera
-                    </button>
-                    <button type="button" onClick={startLiveCamera} className="btn-secondary">
-                      <Video size={14} /> Use live camera
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {cameraSource === 'live' && cameraDevices.length > 0 && (
-                      <select
-                        value={selectedDevice}
-                        onChange={async (event) => {
-                          try {
-                            await attachLiveCamera(event.target.value)
-                          } catch (cameraError) {
-                            setError(errorMessage(cameraError, 'Could not switch camera device.'))
-                          }
-                        }}
-                        className="max-w-[210px] px-2.5 text-[11px]"
-                        aria-label="Camera device"
-                      >
-                        {cameraDevices.map((device, index) => (
-                          <option key={device.deviceId} value={device.deviceId}>
-                            {device.label || `Camera ${index + 1}`}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <button type="button" onClick={captureFrame} className="btn-primary">
-                      <Camera size={14} /> Capture frame
-                    </button>
-                    <button type="button" onClick={stopCamera} className="btn-secondary">Disconnect</button>
-                  </>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex items-center gap-2 text-[11px] text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={liveMarking}
-                    onChange={(event) => setLiveMarking(event.target.checked)}
-                    disabled={!cameraActive}
-                    className="accent-[#426f98]"
-                  />
-                  Mark defects live
-                </label>
-                <label className="inline-flex items-center gap-2 text-[11px] text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={autoCapture}
-                    onChange={(event) => setAutoCapture(event.target.checked)}
-                    disabled={!references?.configured || !cameraActive}
-                    className="accent-[#426f98]"
-                  />
-                  Auto-capture when steady
-                </label>
-              </div>
-            </div>
-            <section className="rca-panel" aria-label="Root cause analysis">
-              <div className="rca-head">
-                <strong>Root cause analysis</strong>
-                <span className="rca-badge">
-                  {rcaStatus ? (rcaStatus.ai_enabled ? `AI: ${rcaStatus.provider}${rcaStatus.model ? ` (${rcaStatus.model})` : ''}` : 'Offline template (no GEMINI_API_KEY)') : 'status unknown'}
-                </span>
-              </div>
-              <p className="rca-hint">
-                {analyseDefects.length
-                  ? `${analyseDefects.length} defect${analyseDefects.length === 1 ? '' : 's'} detected. Analyse them to get the cause, the reason and the solution as a document.`
-                  : 'Capture a frame (or mark defects live) so there are detected defects to analyse.'}
-              </p>
-              <button type="button" onClick={analyseRootCause} disabled={!analyseDefects.length || rcaLoading} className="btn-primary">
-                {rcaLoading ? <LoaderCircle size={14} className="animate-spin" /> : <ScanLine size={14} />} Analyse root cause (AI)
-              </button>
-              {rcaError && <p className="rca-error">{rcaError}</p>}
-              {rcaResult && (
-                <div className="rca-result">
-                  {!rcaResult.ai_used && (
-                    <p className="rca-warn">The AI model was not used ({rcaResult.model}). This is the offline template, not an analysis. Add GEMINI_API_KEY to .env and restart the API.</p>
-                  )}
-                  <h4>Cause</h4>
-                  <p>{rcaResult.root_cause.cause}{rcaResult.root_cause.confidence != null ? ` (${Math.round(rcaResult.root_cause.confidence * 100)}%)` : ''}</p>
-                  <h4>Reason</h4>
-                  <p>{rcaResult.root_cause.rationale}</p>
-                  <h4>Solution</h4>
-                  <ul>{rcaResult.root_cause.corrective_actions.map((action, index) => <li key={`c${index}`}>{action}</li>)}</ul>
-                  <h4>Prevention</h4>
-                  <ul>{rcaResult.root_cause.preventive_actions.map((action, index) => <li key={`p${index}`}>{action}</li>)}</ul>
-                  <div className="rca-downloads">
-                    {Object.keys(rcaResult.documents).map((format) => (
-                      <button key={format} type="button" className="btn-secondary" onClick={() => downloadRca(format)}>
-                        <Upload size={13} /> {format.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </section>
-            {autoCapture && <p className="flex items-center gap-1.5 text-[10px] text-[#426f98]"><LoaderCircle size={13} className="animate-spin" />Waiting for a steady, detailed camera view…</p>}
-          </div>
-        </section>
-
-        <section className="panel overflow-hidden">
-          <div className="flex items-center gap-2.5 border-b border-slate-100 px-4 py-3.5 sm:px-5">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50 text-[#527b9e]"><ScanLine size={16} /></div>
-            <div>
-              <h2 className="panel-title">Reference comparison</h2>
-              <p className="mt-0.5 text-[10px] text-slate-500">Registered images for {partNumber || 'selected part'}</p>
-            </div>
-          </div>
-          <div className="space-y-4 p-4 sm:p-5">
-            {references?.configured && referenceUrls ? (
+        <EngineeringViewport
+          title="Live Captured Image"
+          subtitle={capturedPreview && !showLiveFeed ? 'Latest camera capture' : cameraActive ? 'Camera preview' : 'Capture station offline'}
+          status={cameraActive ? (cameraSource === 'live' ? 'CAMERA CONNECTED' : 'SIMULATED FEED') : capturedPreview ? 'CAPTURED' : 'NOT CONNECTED'}
+          zoom={captureZoom}
+          onZoomChange={setCaptureZoom}
+          onFit={() => setCaptureZoom(1)}
+          focusPoint={focusPoint}
+        >
+          <div className="engineering-capture-frame">
+            {showLiveFeed && cameraActive ? (
               <>
-                <ReferenceTile label="Reference component" description="Registered part photograph" src={referenceUrls.image} alt="Registered part reference photograph" />
-                <ReferenceTile label="2D CAD drawing" description={`Revision ${references.drawing_rev} · top view`} src={referenceUrls.cad} alt="Registered raster CAD drawing" />
+                <video ref={videoRef} autoPlay playsInline muted className="engineering-image" />
+                {visualizationMode === 'detection' && <DefectOverlay detection={liveDetection} selectedDefectId={selectedDefectId} onSelect={setSelectedDefectId} />}
+              </>
+            ) : capturedPreview ? (
+              <>
+                <img className="engineering-image" src={capturedPreview} alt="Latest captured component image" />
+                {visualizationMode === 'detection' && <DefectOverlay detection={captureDetection} selectedDefectId={selectedDefectId} onSelect={setSelectedDefectId} />}
+              </>
+            ) : cameraActive ? (
+              <>
+                <video ref={videoRef} autoPlay playsInline muted className="engineering-image" />
+                {visualizationMode === 'detection' && <DefectOverlay detection={liveDetection} selectedDefectId={selectedDefectId} onSelect={setSelectedDefectId} />}
               </>
             ) : (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-4">
-                <div className="flex items-start gap-2.5">
-                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-white text-slate-500 shadow-sm"><FileImage size={15} /></div>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-700">Part references not configured</p>
-                    <p className="mt-1 text-[10px] leading-4 text-slate-500">Upload the registered physical reference photo and a rasterized CAD view to enable part matching.</p>
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-3">
-                  <label className="text-[10px] font-semibold text-slate-600">
-                    2D CAD diagram <span className="font-normal text-slate-400">(PNG or JPG)</span>
-                    <input type="file" accept="image/png,image/jpeg" onChange={(event) => setCadUpload(event.target.files?.[0] ?? null)} className="mt-1.5 block w-full rounded-md border border-slate-200 bg-white px-2 py-2" />
-                  </label>
-                  <label className="text-[10px] font-semibold text-slate-600">
-                    Reference part image <span className="font-normal text-slate-400">(PNG or JPG)</span>
-                    <input type="file" accept="image/png,image/jpeg" onChange={(event) => setReferenceUpload(event.target.files?.[0] ?? null)} className="mt-1.5 block w-full rounded-md border border-slate-200 bg-white px-2 py-2" />
-                  </label>
-                  <button type="button" onClick={configureReferences} disabled={loading || !cadUpload || !referenceUpload} className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-50">
-                    <Upload size={13} /> Save part references
-                  </button>
-                  <p className="text-[9px] leading-4 text-slate-400">Reference uploads require administrator access. Images are associated with the selected part number.</p>
-                </div>
+              <div className="engineering-empty-visual">
+                <Camera size={27} />
+                <strong>Camera preview is offline</strong>
+                <span>Start a simulated feed or connect a camera to view the component.</span>
               </div>
             )}
+          </div>
+        </EngineeringViewport>
+      </section>
 
-            {references?.configured && (
-              <div className="rounded-md border border-slate-100 bg-slate-50/70 p-3">
-                <div className="flex items-start gap-2 text-[10px] leading-4 text-slate-500">
-                  <Info size={13} className="mt-0.5 shrink-0 text-slate-400" />
-                  Comparison aligns geometric features and edges. Ensure the live view is clear and shows the same part orientation.
-                </div>
-              </div>
-            )}
-
-            <div className="border-t border-slate-100 pt-4">
+      <div className="engineering-command-bar">
+        <div className="engineering-camera-actions">
+          <span className={`engineering-capture-state${capturedPreview ? ' is-captured' : ''}`}>
+            {capturedPreview ? 'CAPTURED IMAGE READY' : cameraActive ? 'WAITING FOR CAPTURE' : 'NO CAPTURE'}
+          </span>
+          {!cameraActive ? (
+            <>
+              <button type="button" className="btn-primary" onClick={() => { setShowLiveFeed(true); void startSimulatedCamera() }}><Camera size={13} /> Start simulated camera</button>
+              <button type="button" className="btn-secondary" onClick={() => { setShowLiveFeed(true); void startLiveCamera() }}><Video size={13} /> Connect camera</button>
+            </>
+          ) : (
+            <>
+              {cameraSource === 'live' && cameraDevices.length > 0 && (
+                <select
+                  value={selectedDevice}
+                  onChange={async (event) => {
+                    try { await attachLiveCamera(event.target.value) }
+                    catch (cameraError) { setError(errorMessage(cameraError, 'Could not switch camera device.')) }
+                  }}
+                  aria-label="Camera device"
+                >
+                  {cameraDevices.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `Camera ${index + 1}`}</option>)}
+                </select>
+              )}
               <button
                 type="button"
-                onClick={verifyCapture}
-                disabled={!capturedImage || !references?.configured || loading}
-                className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {loading ? <LoaderCircle size={14} className="animate-spin" /> : <ScanLine size={14} />}
-                {loading ? 'Comparing images…' : 'Compare captured part'}
-                {!loading && <ArrowRight size={14} />}
-              </button>
-              <button
-                type="button"
+                className="btn-primary"
                 onClick={() => {
-                  setVerification(null)
-                  setCapturedImage(null)
-                  setCapturedPreview('')
+                  if (capturedPreview && !showLiveFeed) {
+                    setShowLiveFeed(true)
+                    setCaptureWhenReady(true)
+                  } else {
+                    captureFrame()
+                  }
                 }}
-                disabled={!capturedImage || loading}
-                className="btn-secondary mt-2 w-full disabled:cursor-not-allowed disabled:opacity-45"
               >
-                <RefreshCw size={13} /> Clear capture and retake
+                <Camera size={13} /> {capturedPreview ? 'Recapture' : 'Capture frame'}
               </button>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <section className={`verification-result ${resultTone}`} aria-live="polite">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="verification-result-icon">
-              {verification?.status === 'Match'
-                ? <CheckCircle2 size={19} />
-                : verification?.status === 'Mismatch'
-                  ? <X size={19} />
-                  : verification
-                    ? <AlertCircle size={19} />
-                    : <CircleDot size={19} />}
-            </div>
-            <div>
-              <p className="eyebrow">Verification result</p>
-              <h2 className="mt-1 text-base font-semibold">
-                {verification?.status ?? 'Ready for comparison'}
-              </h2>
-              <p className="mt-1 max-w-xl text-[11px] leading-4 opacity-80">
-                {verification
-                  ? 'Review the geometric comparison and detected differences before continuing.'
-                  : 'Capture the component and compare it with its registered CAD reference.'}
-              </p>
-            </div>
-          </div>
-          {verification && (
-            <div className="min-w-[150px]">
-              <div className="flex items-end justify-between gap-3">
-                <span className="text-[10px] font-medium opacity-75">Similarity score</span>
-                <span className="text-xl font-semibold tabular-nums">{(verification.score * 100).toFixed(1)}%</span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10">
-                <div className="h-full rounded-full bg-current transition-all" style={{ width: `${Math.min(100, verification.score * 100)}%` }} />
-              </div>
-              <p className="mt-1 text-right text-[9px] opacity-70">Threshold {(verification.threshold * 100).toFixed(0)}%</p>
-            </div>
+              <button type="button" className="btn-secondary" onClick={stopCamera}>Disconnect</button>
+            </>
+          )}
+          {capturedPreview && cameraActive && (
+            <button type="button" className="btn-secondary" onClick={() => setShowLiveFeed((current) => !current)}>
+              <RefreshCw size={12} /> {showLiveFeed ? 'View latest capture' : 'Return to live feed'}
+            </button>
           )}
         </div>
+        <div className="engineering-visual-toggles">
+          <label className="engineering-mode-select">Visualization
+            <select value={visualizationMode} onChange={(event) => setVisualizationMode(event.target.value as typeof visualizationMode)} aria-label="Visualization mode">
+              <option value="original">Original image</option>
+              <option value="detection">Detection overlay</option>
+              <option value="segmentation" disabled>Segmentation overlay · unavailable</option>
+              <option value="heatmap" disabled>Anomaly heatmap · unavailable</option>
+            </select>
+          </label>
+          <label><input type="checkbox" checked={liveMarking} onChange={(event) => setLiveMarking(event.target.checked)} disabled={!cameraActive} /> Detect live</label>
+          <label><input type="checkbox" checked={autoCapture} onChange={(event) => setAutoCapture(event.target.checked)} disabled={!references?.configured || !cameraActive} /> Auto-capture</label>
+          <button type="button" className="btn-secondary" onClick={verifyCapture} disabled={!capturedImage || !references?.configured || !referenceUrls?.image || verificationLoading}>
+            {verificationLoading ? <LoaderCircle size={13} className="animate-spin" /> : <ScanLine size={13} />} Compare images
+          </button>
+        </div>
+      </div>
 
-        {verification && (
-          <>
-            <div className="verification-metrics">
-              <Metric label="Feature matches" value={verification.feature_matches} />
-              <Metric label="Geometric inliers" value={verification.geometric_inliers} />
-              <Metric label="Edge overlap" value={`${(verification.edge_overlap * 100).toFixed(1)}%`} />
-            </div>
-            <ul className="space-y-1.5 text-[11px]">
-              {verification.differences.map((difference, index) => <li key={index} className="flex items-start gap-2"><Circle size={6} className="mt-1.5 shrink-0 fill-current" />{difference}</li>)}
-            </ul>
-            <div className="flex flex-wrap gap-2 border-t border-current/10 pt-3">
-              {verification.status === 'Match' && (
-                <button type="button" onClick={startInspection} disabled={loading} className="btn-primary !border-[#39765e] !bg-[#39765e] hover:!bg-[#2e654f] disabled:opacity-50">
-                  {loading ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />}
-                  {loading ? 'Starting inspection…' : 'Verify and start inspection'}
+      {referenceError && <p className="live-inspection-error" role="alert">{referenceError}</p>}
+      {error && <p className="live-inspection-error" role="alert"><AlertCircle size={14} />{error}</p>}
+
+      <section className="engineering-defect-section panel" aria-label="Zoomed defect views">
+        <header className="engineering-section-head">
+          <div><strong>Zoomed Defect Analysis</strong><small>
+            {activeDetection?.source ? `Source: ${activeDetection.source} · ` : ''}
+            Original-color crops and detector outlines; severity, segmentation masks, and heatmaps are not returned by the live-detection API.
+          </small></div>
+          <span>{activeDetection?.defects.length ?? 0} DETECTED</span>
+        </header>
+        {defectCrops.length ? (
+          <div className="engineering-defect-strip">
+            {defectCrops.map(({ defect, src, width, height, polygon }, index) => {
+              const selected = defect.defect_id === selectedDefectId
+              const color = defectColor(defect)
+              const scoredSeverity = defect.severity
+              return (
+                <button
+                  type="button"
+                  key={defect.defect_id}
+                  className={`engineering-defect-card${selected ? ' is-selected' : ''}`}
+                  style={{ '--defect-color': color } as React.CSSProperties}
+                  onClick={() => setSelectedDefectId(defect.defect_id)}
+                  aria-pressed={selected}
+                >
+                  <span className="engineering-defect-crop">
+                    <img src={src} alt={`Original image crop for ${defect.defect_type}`} />
+                    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+                      <polygon points={polygon.map(([x, y]) => `${x},${y}`).join(' ')} />
+                      <text x="8" y="16">D{index + 1} · {defect.defect_type.replace(/_/g, ' ').toUpperCase()}</text>
+                    </svg>
+                  </span>
+                  <span className="engineering-defect-meta">
+                    <strong>DEFECT {String(index + 1).padStart(2, '0')}</strong>
+                    <span className="engineering-defect-severity">{scoredSeverity ? scoredSeverity.toUpperCase() : 'SEVERITY UNAVAILABLE'}</span>
+                  </span>
+                  <span className="engineering-defect-name">{defect.defect_type.replace(/_/g, ' ')}</span>
+                  <span className="engineering-defect-confidence">Confidence <b>{Math.round(defect.confidence * 100)}%</b></span>
+                  {defect.note && <span className="engineering-defect-note">{defect.note}</span>}
                 </button>
-              )}
-              <button type="button" onClick={() => { setVerification(null); setCapturedImage(null); setCapturedPreview('') }} className="btn-secondary">
-                <RefreshCw size={13} /> Capture another image
-              </button>
-            </div>
-          </>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="engineering-defect-empty">
+            <Layers size={17} />
+            <span>{capturedPreview ? 'No defect regions were returned for this captured image.' : 'Capture an image or enable live detection to populate defect crops.'}</span>
+          </div>
         )}
       </section>
 
-      {error && <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800"><AlertCircle size={15} className="mt-0.5 shrink-0" />{error}</div>}
-    </div>
-  )
-}
+      <section className="engineering-analysis-grid" aria-label="Inspection analysis">
+        <article className="engineering-analysis-panel panel">
+          <header className="engineering-section-head"><div><strong>Defect Analysis Summary</strong><small>Counts returned by live detection</small></div></header>
+          <div className="engineering-count-grid">
+            <div><span>Total</span><strong>{activeDetection?.defects.length ?? 0}</strong></div>
+            <div className="severity-critical"><span>Critical</span><strong>{hasSeverityData ? severityCount('critical') : '—'}</strong></div>
+            <div className="severity-high"><span>High</span><strong>{hasSeverityData ? severityCount('high') : '—'}</strong></div>
+            <div className="severity-moderate"><span>Moderate</span><strong>{hasSeverityData ? severityCount('moderate') : '—'}</strong></div>
+            <div className="severity-low"><span>Low</span><strong>{hasSeverityData ? severityCount('low') : '—'}</strong></div>
+          </div>
+          <div className={`engineering-inspection-status ${verification?.status === 'Match' ? 'is-pass' : verification?.status ? 'is-review' : ''}`}>
+            Inspection status <strong>{verification?.status ?? 'PENDING COMPARISON'}</strong>
+          </div>
+          <div className="engineering-chart-list">
+            {Object.entries(defectsByType).length ? Object.entries(defectsByType).map(([name, count]) => (
+              <div className="engineering-chart-row" key={name}>
+                <span>{name.replace(/_/g, ' ')}</span>
+                <div><i style={{ width: `${Math.max(8, count / (activeDetection?.defects.length ?? 1) * 100)}%`, background: DEFECT_COLORS[name] ?? '#1671b8' }} /></div>
+                <b>{count}</b>
+              </div>
+            )) : <p className="engineering-analysis-empty">Defect category distribution appears after detection.</p>}
+          </div>
+        </article>
 
-function ReferenceTile({
-  label,
-  description,
-  src,
-  alt,
-}: {
-  label: string
-  description: string
-  src: string
-  alt: string
-}) {
-  return (
-    <div>
-      <div className="mb-1.5 flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[11px] font-semibold text-slate-700">{label}</p>
-          <p className="mt-0.5 text-[9px] text-slate-500">{description}</p>
-        </div>
-        <span className="status-pill status-green !px-2 !py-1"><Check size={10} />Registered</span>
-      </div>
-      <div className="image-stage min-h-[130px]">
-        <img src={src} alt={alt} />
-      </div>
-    </div>
-  )
-}
+        <article className="engineering-analysis-panel panel">
+          <header className="engineering-section-head"><div><strong>Reference vs Captured</strong><small>Part verification results</small></div></header>
+          {verification ? (
+            <>
+              <div className={`engineering-verification-result ${verification.status === 'Match' ? 'is-match' : 'is-review'}`}>
+                <strong>{verificationAlignmentStatus === 'required' ? 'Alignment required' : verification.status}</strong>
+                <span>Overall image similarity</span><b>{formatPercent(verificationScore)}</b>
+              </div>
+              <div className="engineering-comparison-metrics">
+                <span>Structural Similarity (SSIM) <b>Not available</b></span>
+                <span>Feature matching <b>{formatPercent(verification.feature_match_percent)}</b></span>
+                <span>Geometric alignment <b>{verificationAlignmentStatus === 'aligned' ? 'Aligned' : 'Alignment required'}</b></span>
+                <span>Feature matches <b>{verification.feature_matches}</b></span>
+                <span>Geometric inliers <b>{formatCount(verification.geometric_inliers)}</b></span>
+                <span>Edge overlap <b>{formatPercent(verification.edge_overlap)}</b></span>
+                <span>Dimensional deviation <b>Not available</b></span>
+                <span>Image registration <b>{verificationAlignmentStatus === 'aligned' ? 'Registered' : 'Alignment required'}</b></span>
+              </div>
+              {(verification.reference_kind === 'cad_drawing' ? referenceUrls?.cad : referenceUrls?.image) && capturedPreview && (
+                <div className="engineering-comparison-images">
+                  <figure>
+                    <img
+                      src={verification.reference_kind === 'cad_drawing' ? referenceUrls?.cad : referenceUrls?.image}
+                      alt={verification.reference_kind === 'cad_drawing'
+                        ? 'Registered CAD drawing used for comparison'
+                        : 'Registered physical-part reference image used for comparison'}
+                    />
+                    <figcaption>{verification.reference_kind === 'cad_drawing' ? 'Registered CAD drawing' : 'Registered part reference'}</figcaption>
+                  </figure>
+                  <figure>
+                    <img src={capturedPreview} alt="Captured component image" />
+                    <figcaption>Captured image</figcaption>
+                  </figure>
+                </div>
+              )}
+              {verification.visualizations && Object.entries({
+                aligned_overlay: 'Alignment preview',
+                difference_image: 'Difference image',
+                difference_heatmap: 'Difference heatmap',
+                matched_features: 'Matched features',
+              }).map(([key, title]) => {
+                const src = verification.visualizations?.[key as keyof NonNullable<Verification['visualizations']>]
+                return src ? (
+                  <figure className="engineering-comparison-preview" key={key}>
+                    <img src={src} alt={title} />
+                    <figcaption>{title}</figcaption>
+                  </figure>
+                ) : null
+              }              )}
+              {verification.differences.slice(0, 2).map((difference, index) => <p className="engineering-difference" key={index}>{difference}</p>)}
+              {verification.status === 'Match' && <button type="button" className="btn-primary" onClick={startInspection} disabled={loading}><Check size={13} /> Verify and start inspection</button>}
+            </>
+          ) : verificationLoading ? (
+            <div className="engineering-analysis-empty" role="status">Comparing images...</div>
+          ) : verificationError ? (
+            <div className="engineering-analysis-empty" role="alert">
+              <strong>Comparison failed</strong>
+              <p>{verificationError}</p>
+            </div>
+          ) : referencesLoading ? (
+            <div className="engineering-analysis-empty" role="status">Loading reference image...</div>
+          ) : !references?.configured || !referenceUrls?.image ? (
+            <div className="engineering-analysis-empty" role="alert">
+              <strong>Reference image unavailable</strong>
+              {referenceError && <p>{referenceError}</p>}
+            </div>
+          ) : !capturedImage ? (
+            <div className="engineering-analysis-empty">Captured image unavailable</div>
+          ) : (
+            <div className="engineering-analysis-empty">
+              <p>Compare the capture with the registered part reference to calculate alignment and image similarity.</p>
+              <button type="button" className="btn-primary" onClick={verifyCapture} disabled={verificationLoading}>
+                {verificationLoading ? <LoaderCircle size={13} className="animate-spin" /> : <ScanLine size={13} />}
+                {verificationLoading ? 'Comparing images...' : 'Compare captured part'}
+              </button>
+            </div>
+          )}
+          {references?.configured && verification && <p className="engineering-revision">Reference drawing revision {references.drawing_rev}</p>}
+        </article>
 
-function Metric({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-md border border-current/10 bg-white/50 px-3 py-2">
-      <p className="text-[9px] font-medium opacity-70">{label}</p>
-      <p className="mt-1 text-sm font-semibold tabular-nums">{value}</p>
+        <article className="engineering-analysis-panel engineering-rca-panel panel">
+          <header className="engineering-section-head">
+            <div><strong>AI Root Cause Analysis</strong><small>{rcaStatus?.ai_enabled ? `AI · ${rcaStatus.provider}` : 'Backend analysis service'}</small></div>
+            <button type="button" className="btn-secondary" onClick={analyseRootCause} disabled={!analyseDefects.length || rcaLoading}>
+              {rcaLoading ? <LoaderCircle size={12} className="animate-spin" /> : <ScanLine size={12} />} Analyze
+            </button>
+          </header>
+          {selectedAnalysis ? (
+            <div className="engineering-rca-content">
+              {!selectedAnalysis.ai_used && <p className="engineering-rca-warning">Offline analysis response · {selectedAnalysis.model}</p>}
+              <span>PROBABLE ROOT CAUSE</span><strong>{selectedAnalysis.root_cause.cause}</strong>
+              {selectedAnalysis.root_cause.rationale && <p>{selectedAnalysis.root_cause.rationale}</p>}
+              <span>RECOMMENDED CORRECTIVE ACTIONS</span>
+              {selectedAnalysis.root_cause.corrective_actions.length
+                ? <ul>{selectedAnalysis.root_cause.corrective_actions.slice(0, 3).map((action) => <li key={action}>{action}</li>)}</ul>
+                : <p>No corrective actions were returned.</p>}
+              {typeof selectedAnalysis.root_cause.confidence === 'number' && <small>Analysis confidence: {Math.round(selectedAnalysis.root_cause.confidence * 100)}%</small>}
+              {selectedAnalysis.root_cause.citations.length > 0 && <small>Evidence: {selectedAnalysis.root_cause.citations.slice(0, 2).join(' · ')}</small>}
+              {selectedCrop && <small>Selected evidence: {selectedCrop.defect.defect_type.replace(/_/g, ' ')} · {Math.round(selectedCrop.defect.confidence * 100)}% detector confidence</small>}
+              <div className="engineering-rca-downloads">
+                {Object.keys(selectedAnalysis.documents).map((format) => (
+                  <button key={format} type="button" className="btn-secondary" onClick={() => downloadRca(format)}>
+                    <Upload size={11} /> {format.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="engineering-analysis-empty">{rcaError || (analyseDefects.length ? 'Run the existing AI root-cause service to analyze detected defects.' : 'Root-cause analysis is available when defect detections are returned.')}</p>
+          )}
+        </article>
+      </section>
+
+      {!references?.configured && (
+        <details className="engineering-reference-upload">
+          <summary>Register 2D drawing and reference part image</summary>
+          <div className="engineering-upload-fields">
+            <label>Raster CAD drawing<input type="file" accept="image/png,image/jpeg" onChange={(event) => setCadUpload(event.target.files?.[0] ?? null)} /></label>
+            <label>Reference part image<input type="file" accept="image/png,image/jpeg" onChange={(event) => setReferenceUpload(event.target.files?.[0] ?? null)} /></label>
+            <button type="button" className="btn-secondary" onClick={configureReferences} disabled={loading || !cadUpload || !referenceUpload}><Upload size={13} /> Save references</button>
+          </div>
+        </details>
+      )}
     </div>
   )
 }
